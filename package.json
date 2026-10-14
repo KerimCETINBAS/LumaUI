@@ -1,0 +1,25 @@
+{
+  "name": "lumaui-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "workspaces": [
+    "addons/*"
+  ],
+  "scripts": {
+    "check": "npm run check --workspaces",
+    "build": "node tools/build.mjs",
+    "deploy": "node tools/build.mjs --deploy",
+    "test": "node --test tests/*.test.cjs",
+    "test:integration": "node tests/collections.integration.cjs",
+    "release:check": "node tools/release.mjs --check",
+    "build:release": "node tools/release.mjs"
+  },
+  "devDependencies": {
+    "fengari-node-cli": "^0.1.0",
+    "wuira": "file:.packages/wuira-encoding-20261015.tgz"
+  }
+}

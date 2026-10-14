@@ -1,0 +1,5 @@
+## Interface: 16001
+## Title: LumaUI.ActionBars
+## Notes: Spell action buttons, key bindings and native bar suppression
+## Version: 0.1.0
+## Dependencies: LumaUI

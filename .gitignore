@@ -1,0 +1,8 @@
+node_modules/
+dist/
+artifacts/
+*.toc
+lumaui.local.mjs
+.packages/*
+!.packages/wuira-encoding-20261015.tgz
+addons/**/.packages/
