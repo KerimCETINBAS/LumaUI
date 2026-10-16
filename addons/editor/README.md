@@ -1,17 +1,29 @@
 # LumaUI.Editor
 
-Optional visual collection editor for LumaUI, built with wuira.
+Optional in-game visual component editor for LumaUI, built with wuira.
 
-Open **UI Library > Edit** to change a saved player or hotbar collection, or use **New** in the editor to start another collection. Add and nest elements, change their dimensions, bind HP/mana to progress bars, or bind a spell ID to an action button. Action previews do not execute spells.
+Create a component in **UI Library** using **New blank**, **New party**, **New raid**, **New spell list**, or **New headless**. Use a saved component's **Edit** action to open it. Import and Export belong to the library.
 
-The preview uses the same component factories and layout engine as the mounted collection. It centers the collection at its actual size, without scaling or applying its screen position. Inactive timers, absent icons and empty dynamic labels get sample visuals for editing. This does not change runtime visibility or saved anchors. Selecting elements refreshes the page after the click finishes while keeping the window open.
+The editor occupies the full configuration content area, without the navigation sidebar. **Back** returns to the previous configuration page. **Design** shows the hierarchy, preview and inspector together; **Preview**, **Hierarchy** and **Inspector** focus that panel across the workspace. These preferences do not change component data.
 
-**Properties** follows a grouped form layout: **Display**, **Layout**, **Data**, and **Actions** for action buttons. Related settings appear together, with labeled number inputs, dropdowns, checkboxes and RGBA swatches. Scroll to see longer forms, then **Save properties**. **Apply** updates the mounted collection.
+The ribbon groups elements into **Layout**, **Visuals**, **Units** and **Effects**, with a separate row of icon tools. **Components** displays as many saved component buttons as fit. Filter by name or ID in its textbox; typing retains focus and Escape clears the filter. Choose a component to embed a shared reference inside the selected container.
 
-**Sources** lists the collection’s sources. Create a named source, choose its registered type, edit its labeled fields together in the scrolling form, and **Save source**. Existing sources can be edited or deleted once their references are removed. In **Properties**, choose a **Source** from the dropdown and optionally enter a **Path** such as `channels.regen` or `progress`. Empty paths use the source’s default capability. The binding selector also exposes visibility, text and opacity links. Paths resolve bindable source objects; computation factories are a separate future feature.
+Double-click the component name at the top to rename it. Enter stages the name, Escape cancels, and **Save** persists it. Saving while the name input is focused also confirms it. Renaming preserves component IDs, references and character bindings.
 
-**Save** persists the working draft. **Apply** saves and mounts its preset collection. **Import** opens a shared collection in the draft; **Export** produces one LumaUI share string. Native Blizzard skins use the separate entry in the master's UI Library.
+The hierarchy has fixed-width rows, disclosure buttons, readable names and spell icons. Helper children start folded. **Expand all** and **Collapse all** affect only the view; selecting a descendant opens its ancestors and scrolls it into view. Drag rows to their siblings' top/bottom edges to reorder, or into the middle to nest. Invalid child counts and ancestor cycles are rejected.
 
-The editor preserves source/activity/text/alpha links and optional-addon ownership when opening existing collections. Closing the editor does not remove mounted collections. The hierarchy is one scrollable tree. Drag a row to another row’s top/bottom edge to reorder it, or to the middle to nest it. The highlighted area and hint show the destination. Root moves, ancestor cycles and invalid child counts are rejected. **Move up / Move down** are also available.
+The preview uses the same factories and layout engine as mounted components. It centers visuals at their actual size without changing saved screen anchors. Click a visual to select it; a spell's icon selects its action button. The highlighted path identifies its place in the component. Preview actions remain disabled. Inactive sources use sample visuals.
 
-Development is managed from the monorepo root: `npm ci`, `npm run check`, `npm run build`, and `npm run test:integration`. Run `npm run deploy` to install all addons into the configured local game directory. The shared `lumaui/core` contract is linked directly through npm workspaces; its TOC requires LumaUI.
+**Properties** groups Display, Layout, Data and button Actions. **Update preview** stages property edits without saving the live component. **Sources** edits named source definitions; **Update source** stages the source. The main **Save** commits pending property/source edits, persists the component and updates it in the game when activation rules match. It preserves manual disable, character bindings and component ownership. Invalid input leaves the saved component intact.
+
+Forms and option lists use native mouse-wheel scrolling, with no previous/next pages. Long forms also show a scroll-position indicator. Typed form values are retained when switching panel views or returning to configuration.
+
+**Component** configures Condition met, Always or Never, player class, group condition and native Edit Mode layout. Unlock positions remain scoped to the active native layout.
+
+A party or raid draft contains a roster source and one member template under **ForEach**. Add visuals inside that template, using **$unit** in sources and **$pet** for its pet. The runtime derives members from the roster and retains unchanged Cells by GUID. An optional second template represents party pets.
+
+A spell-list draft contains a ForEach with one button/icon template. In **Data > List helper**, use expressions such as `KnownSpells("Holy Light", "Seal*", /^Blessing of .*/i)`. Choose **Current item** as the template's action, icon or text source. Stable spell keys are automatic.
+
+Tools, hierarchy entries and common controls share editable SVG glyphs from `addons/core/assets/icons/svg`. The build converts them to transparent native TGA textures and includes them in the core addon; feature addons use `LumaUI.Theme.icons`. Run `npm run icons:preview` to inspect the set.
+
+Development is managed from the monorepo root: `npm ci`, `npm run check`, `npm run build`, `npm test`, and `npm run test:integration`. Run `npm run deploy` to install the addons into the configured local game directory.

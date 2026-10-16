@@ -1,11 +1,14 @@
 
 local registry=__wuiraModules_LumaUI
-C_AddOns={IsAddOnLoaded=function() return true end}
+C_AddOns={IsAddOnLoaded=function() return true,true end}
 local store=new(registry.require('lua_modules.wuira.lib.store.index').StoreRegistry,{addon='LumaUI',variable='BuilderTestDB'})
 local presets=new(registry.require('builder.Presets').Presets,store)
 local skins=new(registry.require('builder.Skins').Skins,store)
 registry.require('builder.Builtins').registerBuiltins(nil,presets,skins)
-assert(#presets:ComponentTypes()==10 and #presets:SourceTypes()==10)
+local components,sourceTypes={},{}
+for _,name in ipairs(presets:ComponentTypes()) do components[name]=true end
+for _,name in ipairs(presets:SourceTypes()) do sourceTypes[name]=true end
+assert(components.foreach and components.unitText and components.unitAuras and sourceTypes.hp and sourceTypes.power and sourceTypes.groupMembers,'required native and source-driven factories are registered')
 assert(#skins:TargetTypes()==3)
 local created,disposed=0,0
 local HP=registry.require('lua_modules.wuira.lib.datasources.Resources').HP
@@ -19,7 +22,8 @@ local function doc()
   {id='b',type='progress',source='health',props={width='inherit',height=24}}
  }}}
 end
-local playerDocument=registry.require('builder.PlayerCollection').createPlayerCollection(nil,{x=11,y=22})
+local playerDocument=testBuiltinDocument('PlayerResources')
+playerDocument.root.props.x=11;playerDocument.root.props.y=22
 assert(presets:Validate(playerDocument).root.props.x==11,'player starter is a preset document')
 local observed=0
 local stopObserve=presets:ObserveMount(function(_,document,instance)
@@ -27,7 +31,37 @@ local stopObserve=presets:ObserveMount(function(_,document,instance)
 end)
 local playerInstance=presets:Mount(playerDocument)
 assert(playerInstance.Frame.shown and observed==1,'player collection mounts through the common runtime')
+local portraitHost=playerInstance.Nodes:get('playerPortrait')
+assert(portraitHost and portraitHost.parent==playerInstance.Nodes:get('healthBar') and portraitHost.width==38 and portraitHost.height==38,'portrait is a saved child beside health/mana')
+local portraitButton
+for _,frame in ipairs(nativeFrames) do if frame.attributes and frame.attributes.unit=='player' and frame.attributes.type2=='togglemenu' and frame.shown then portraitButton=frame end end
+assert(portraitButton and portraitButton.parent==UIParent and not playerInstance.Frame:IsProtected(),'portrait has an independent protected root')
+assert(portraitButton.attributes.type1=='target' and portraitButton.clicks[1]=='LeftButtonUp' and portraitButton.clicks[2]=='RightButtonUp','native selection and menu attributes')
+assert(portraitButton.texture.portraitUnit=='player','native portrait is drawn')
+local updates=portraitButton.texture.portraitUpdates
+emit('UNIT_PORTRAIT_UPDATE','party1');assert(portraitButton.texture.portraitUpdates==updates)
+combat=true;emit('UNIT_PORTRAIT_UPDATE','player');assert(portraitButton.texture.portraitUpdates==updates+1);combat=false
 presets:Unmount('player');stopObserve()
+assert(not portraitButton.shown and portraitButton.attributes.type1==nil and next(portraitButton.events)==nil,'portrait disposes with its collection')
+local visibleIndicator=false
+presets:RegisterSource('portraitFlag',{properties={},Create=function() return {IsActive=function() return visibleIndicator end} end})
+local portraitDoc={version=1,kind='preset',id='portrait-test',name='Portrait',sources={{name='flag',type='portraitFlag',props={}}},root={id='root',type='flow',props={width=80,height=40},children={
+ {id='portrait',type='unitPortrait',props={width=38,height=38,unit='player'}},
+ {id='indicator',type='label',visibleSource='flag',props={width=30,height=2,text='Timer'}}
+}}}
+local portraitHandle=presets:Mount(portraitDoc)
+local indicator=portraitHandle.Nodes:get('indicator')
+assert(not indicator.shown)
+combat=true;visibleIndicator=true
+for _,frame in ipairs(nativeFrames) do if frame.shown and frame.onUpdate then frame.onUpdate(frame,.1) end end
+assert(indicator.shown,'resource indicators remain responsive in combat beside the portrait')
+combat=false;presets:Unmount('portrait-test')
+local beforePreview=#nativeFrames
+local preview=presets:Preview(portraitDoc)
+preview.Frame=registry.require('lua_modules.wuira.lib.index').wuira:Mount(preview.View)
+for i=beforePreview+1,#nativeFrames do assert(not nativeFrames[i].attributes,'preview cannot create a secure portrait button') end
+assert(preview.Nodes:get('portrait').texture.portraitUnit=='player','preview draws the real portrait')
+preview:Dispose()
 local value=doc()
 local built=presets:Create(value)
 assert(created==1 and built.View.children[1].source==built.View.children[2].source,'one source per document name')
@@ -179,4 +213,35 @@ local refreshed=presets.active:get('composed');assert(refreshed.Nodes:get('left'
 presets:Unmount('composed')
 local fromLibrary=presets:Create(presets:Get('composed'));assert(#fromLibrary.View.children==2);fromLibrary:Dispose()
 presets:Delete('composed');presets:Delete('shared-child');presets:Delete('effect')
+-- Imported native visibility belongs to its replacement component.
+local function visibilityHarness(variable)
+ local memory=new(registry.require('lua_modules.wuira.lib.store.index').StoreRegistry,{addon='LumaUI',variable=variable})
+ local p=new(registry.require('builder.Presets').Presets,memory)
+ local s=new(registry.require('builder.Skins').Skins,memory)
+ registry.require('builder.Builtins').registerBuiltins(nil,p,s)
+ return {Store=memory,Presets=p,Skins=s}
+end
+local fresh=visibilityHarness('FreshVisibilityDB')
+local originalParent=CreateFrame('Frame',nil,UIParent)
+PlayerFrame=CreateFrame('Frame',nil,originalParent);TargetFrame=CreateFrame('Frame',nil,UIParent);FocusFrame=CreateFrame('Frame',nil,UIParent)
+PlayerFrame.events.HEALTH=true
+fresh.Presets:Save(testBuiltinDocument('PlayerResources'),true);fresh.Presets:Restore()
+assert(PlayerFrame:GetParent()~=originalParent,'replacement owns the hide effect')
+assert(TargetFrame:GetParent()==UIParent and FocusFrame:GetParent()==UIParent,'unreplaced frames remain native')
+local freshPlayer=fresh.Presets:Get('player')
+fresh.Presets:Unmount('player');fresh.Presets:Save(freshPlayer,false)
+assert(PlayerFrame:GetParent()==originalParent and PlayerFrame.events.HEALTH,'disabling replacement restores native parent and keeps native events')
+fresh.Presets:Mount(freshPlayer);fresh.Presets:Save(freshPlayer,true)
+local freshFrame=fresh.Presets.active:get('player').Frame
+combat=true;fresh.Presets:Unmount('player');fresh.Presets:Save(freshPlayer,false)
+assert(PlayerFrame:GetParent()~=originalParent and freshFrame.shown,'protected teardown waits for combat')
+combat=false;emit('PLAYER_REGEN_ENABLED')
+assert(PlayerFrame:GetParent()==originalParent and not freshFrame.shown,'native frame returns with custom frame teardown')
+fresh.Presets:Restore();assert(PlayerFrame:GetParent()==originalParent,'disabled replacement stays disabled')
+for _,skinDoc in ipairs(fresh.Skins:List()) do fresh.Skins:Remove(skinDoc.id) end
+-- A replacement remains editable without startup template rewrites.
+local edited=fresh.Presets:Get('player');edited.root.props.width=333
+fresh.Presets:Save(edited,false);fresh.Presets:Restore()
+assert(fresh.Presets:Get('player').root.props.width==333 and fresh.Presets:ActivationStatus('player')=='Disabled','saved geometry and manual disable survive reconciliation')
+assert(PlayerFrame:GetParent()==originalParent,'an inactive imported replacement leaves the native frame visible')
 print('Builder runtime checks passed')

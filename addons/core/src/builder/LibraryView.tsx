@@ -1,17 +1,21 @@
-import { UI } from "wuira";
-import { FlowLayout, Label, Button, Background } from "wuira/ui";
-import type { LumaCoreAPI, BuilderDocument } from "../core/contract";
+import { UI, wuira } from "wuira";
+import { FlowLayout, GridLayout, Cell, ScrollHost, Label, Button, Background, Border } from "wuira/ui";
+import type { LumaCoreAPI, BuilderDocument, PresetDraftKind } from "../core/contract";
 import { BuilderSettings } from "./Library";
+import { ControlContent, controlIcon } from "../theme/ControlContent";
+
 export function installLibrary(core: LumaCoreAPI): void {
     let kind: "preset" | "skin" = "preset";
-    let page = 0;
-    let message = "Presets create new UI. Skins customize registered Blizzard frames.";
+    let message = "";
+    let scroll: ScrollHost | undefined;
+    const offsets = { preset: 0, skin: 0 };
+    const colors = core.Theme.colors;
     const refresh = () => core.RefreshCustomization();
     const run = (action: () => void) => { try { action(); message = "Updated."; } catch (failure) { message = String(failure); } refresh(); };
-    const control = (text: string, action: () => void, width = 110) => <Button width={width} height={28} onClick={action}
-        decorations={{ background: new Background({ color: core.Theme.colors.border }) }}><Label text={text} align="CENTER" fontSize={11} /></Button>;
+    const control = (text: string, action: () => void, width: number) => <Button width={width} height={24} onClick={action}
+        decorations={{ background: new Background({ color: colors.border }) }}><ControlContent text={text} icon={controlIcon(text)} width={width} /></Button>;
     const activate = (document: BuilderDocument) => run(() => {
-        if (document.kind === "preset") { core.Presets.Mount(document); core.Presets.Save(document, true); }
+        if (document.kind === "preset") core.Presets.SetActivation(document.id, document.enabled === "always" ? "always" : "condMet");
         else { core.Skins.Apply(document); core.Skins.Save(document, true); }
     });
     const disable = (document: BuilderDocument) => run(() => {
@@ -20,40 +24,92 @@ export function installLibrary(core: LumaCoreAPI): void {
     });
     const summary = (document: BuilderDocument): string => {
         if (document.kind !== "preset") return "Native skin";
-        let type = "Preset"; try { type = core.Presets.IsHeadless(document) ? "Headless" : "Visual"; } catch { type = "Unavailable component or dependency"; }
+        let type = "Component"; try { type = core.Presets.IsHeadless(document) ? "Headless" : "Visual"; } catch { type = "Unavailable component or dependency"; }
         const users = core.Presets.UsedBy(document.id);
         return type + (users.length > 0 ? " | Used by: " + users.map(parent => parent.name).join(", ") : "");
     };
-    core.RegisterPage({ id: "library", title: "UI Library", summary: "Import presets or customize Blizzard frames with skins.", Render: context => {
-        const documents: BuilderDocument[] = kind === "preset" ? core.Presets.List() : core.Skins.List();
+    const tab = (type: "preset" | "skin", text: string, width: number) => <Button width={width} height={34}
+        onClick={() => { if (kind !== type) { kind = type; message = ""; refresh(); } }}
+        decorations={{ background: new Background({ color: kind === type ? colors.surface : colors.background }) }}>
+        <Label text={text} align="CENTER" fontSize={11} color={kind === type ? colors.accent : colors.muted} />
+    </Button>;
+
+    core.RegisterPage({ id: "library", title: "UI Library", summary: "Import components or customize Blizzard frames with skins.", Render: context => {
+        const shownKind = kind;
+        const documents: BuilderDocument[] = shownKind === "preset" ? core.Presets.List() : core.Skins.List();
         const enabled = core.Store.get(BuilderSettings).enabled;
-        page = Math.min(page, Math.max(0, Math.ceil(documents.length / 4) - 1));
-        return <FlowLayout width={context.width} height={context.height} gap={12}>
-            <Label height={30} text="UI Collections" fontSize={22} />
-            <Label height={32} text={message} fontSize={11} color={core.Theme.colors.muted} />
-            <FlowLayout height={28} direction="horizontal" gap={8}>
-                {control("Presets", () => { kind = "preset"; page = 0; refresh(); })}
-                {control("Blizzard Skins", () => { kind = "skin"; page = 0; refresh(); }, 130)}
-                {control("Import " + kind, () => core.OpenImport(kind), 130)}
+        const importWidth = Math.min(146, context.width * .36);
+        const firstTabWidth = Math.min(120, (context.width - importWidth) / 2);
+        const secondTabWidth = Math.min(144, context.width - importWidth - firstTabWidth);
+        const innerWidth = context.width - 20;
+        const gridWidth = innerWidth - 8;
+        const cardWidth = (gridWidth - 10) / 2;
+        const actionColumns = cardWidth >= 300 ? 4 : 2;
+        const actionHeight = actionColumns === 4 ? 24 : 52;
+        const cardHeight = 68 + actionHeight;
+        const templates: { label: string; kind: PresetDraftKind }[] = [
+            { label: "New blank", kind: "visual" }, { label: "New party", kind: "party" }, { label: "New raid", kind: "raid" },
+            { label: "New spell list", kind: "spells" }, { label: "New headless", kind: "headless" },
+        ];
+        const toolCount = shownKind === "preset" ? templates.length + 1 : 1;
+        const toolColumns = Math.min(toolCount, Math.max(1, Math.floor(innerWidth / 110)));
+        const toolWidth = (innerWidth - (toolColumns - 1) * 6) / toolColumns;
+        const toolHeight = Math.ceil(toolCount / toolColumns) * 28 + (Math.ceil(toolCount / toolColumns) - 1) * 6;
+        const viewportHeight = Math.max(40, context.height - 90 - toolHeight - (message === "" ? 0 : 30));
+        const contentHeight = Math.max(32, Math.ceil(documents.length / 2) * (cardHeight + 8) - 8);
+        const cards = documents.map(document => {
+            // Eligibility may be waiting even while enabled; the toggle follows manual state.
+            const isEnabled = enabled.includes(document.kind + ":" + document.id) && (document.kind !== "preset" || document.enabled !== "never");
+            const status = document.kind === "preset" ? core.Presets.ActivationStatus(document.id) : isEnabled ? "Enabled" : "Disabled";
+            const actionWidth = (cardWidth - 16 - (actionColumns - 1) * 4) / actionColumns;
+            const actions = [
+                control(isEnabled ? "Disable" : "Enable", () => isEnabled ? disable(document) : activate(document), actionWidth),
+                ...(document.kind === "preset" ? [control("Edit", () => core.EditPreset(document), actionWidth)] : []),
+                control("Export", () => run(() => core.OpenExport(document)), actionWidth),
+                control("Delete", () => run(() => { if (document.kind === "preset") core.Presets.Delete(document.id); else core.Skins.Delete(document.id); }), actionWidth),
+            ];
+            return <FlowLayout width={cardWidth} height={cardHeight} gap={4} padding={8}
+                decorations={{ background: new Background({ color: colors.background }) }}>
+                <Label height={18} text={document.name} fontSize={12} />
+                <Label height={26} fontSize={10} color={colors.muted} text={status + " | " + summary(document)} />
+                <GridLayout width={cardWidth - 16} height={actionHeight} columns={actionColumns} cellWidth={actionWidth} cellHeight={24} rowGap={4} columnGap={4}>
+                    {actions}
+                </GridLayout>
+            </FlowLayout>;
+        });
+        return <FlowLayout width={context.width} height={context.height} gap={0}>
+            <FlowLayout height={34} direction="horizontal" gap={0}>
+                {tab("preset", "Components", firstTabWidth)}
+                {tab("skin", "Blizzard Skins", secondTabWidth)}
+                <Cell width={Math.max(0, context.width - firstTabWidth - secondTabWidth - importWidth)} height={34} />
+                <Button width={importWidth} height={28} margin={{ top: 3, bottom: 3 }} onClick={() => core.OpenImport(shownKind)}
+                    decorations={{ background: new Background({ color: colors.border }), border: new Border({ color: colors.accent, thickness: 1 }) }}>
+                    <ControlContent text={shownKind === "preset" ? "Import component" : "Import skin"} icon="import" width={importWidth} height={28} />
+                </Button>
             </FlowLayout>
-            <Label height={24} text={kind === "preset" ? "NEW INTERFACE TREES" : "EXISTING BLIZZARD FRAMES"} fontSize={11} color={core.Theme.colors.accent} />
-            {documents.slice(page * 4, page * 4 + 4).map(document => <FlowLayout height={94} gap={6} padding={8}
-                decorations={{ background: new Background({ color: core.Theme.colors.surface }) }}>
-                <Label height={18} text={document.name + (enabled.includes(kind + ":" + document.id) ? "  (enabled)" : "  (disabled)")} fontSize={12} />
-                <Label height={20} fontSize={10} color={core.Theme.colors.muted} text={summary(document)} />
-                <FlowLayout height={28} direction="horizontal" gap={6}>
-                    {control("Apply", () => activate(document), 80)}
-                    {control("Disable", () => disable(document), 80)}
-                    {document.kind === "preset" ? control("Edit", () => core.EditPreset(document), 80) : <></>}
-                    {control("Export", () => run(() => core.OpenExport(document)), 80)}
-                    {control("Delete", () => run(() => { if (document.kind === "preset") core.Presets.Delete(document.id); else core.Skins.Delete(document.id); }), 80)}
+            <FlowLayout width={context.width} height={context.height - 34} padding={10} gap={8}
+                decorations={{ background: new Background({ color: colors.surface }) }}>
+                <GridLayout width={innerWidth} height={toolHeight} columns={toolColumns} cellWidth={toolWidth} cellHeight={28} columnGap={6} rowGap={6}>
+                    {shownKind === "preset" ? templates.map(template => control(template.label, () => core.CreatePreset(template.kind), toolWidth)) : []}
+                    {control("Built-in presets", () => core.OpenCustomization("builtin-presets"), toolWidth)}
+                </GridLayout>
+                {message === "" ? [] : <Label height={22} text={message} fontSize={11} color={colors.accent} />}
+                <Cell width={innerWidth} height={viewportHeight} clickThrough={false} onMount={host => {
+                    const viewport = new ScrollHost(host, offset => { offsets[shownKind] = offset; }); scroll = viewport;
+                    let content: wuiraNativeFrame | undefined;
+                    try {
+                        const view = documents.length === 0
+                            ? <Label width={gridWidth} height={32} text="Import a component, or create one with LumaUI.Editor." fontSize={11} />
+                            : <GridLayout width={gridWidth} height={contentHeight} columns={2} cellWidth={cardWidth} cellHeight={cardHeight} columnGap={10} rowGap={8}>{cards}</GridLayout>;
+                        content = wuira.Mount(view, undefined, viewport.Frame);
+                        viewport.SetContent(content!, offsets[shownKind]);
+                    } catch (failure) { if (content !== undefined) wuira.Unmount(content); viewport.Dispose(); if (scroll === viewport) scroll = undefined; throw failure; }
+                    return () => { if (content !== undefined) wuira.Unmount(content); viewport.Dispose(); if (scroll === viewport) scroll = undefined; };
+                }} />
+                <FlowLayout height={20} direction="horizontal" gap={8}>
+                    <Label width={innerWidth} height={20} fontSize={10} color={colors.muted}
+                        text={documents.length + (shownKind === "preset" ? " components" : " skins") + " | Scroll to browse"} />
                 </FlowLayout>
-            </FlowLayout>)}
-            <Label height={32} condition={documents.length === 0} text="Import a document, or create a preset with LumaUI.Editor." fontSize={12} />
-            <FlowLayout height={28} direction="horizontal" gap={8}>
-                {control("<", () => { page = Math.max(0, page - 1); refresh(); }, 40)}
-                <Label width={90} text={String(page + 1) + " / " + Math.max(1, Math.ceil(documents.length / 4))} align="CENTER" />
-                {control(">", () => { page = Math.min(Math.max(0, Math.ceil(documents.length / 4) - 1), page + 1); refresh(); }, 40)}
             </FlowLayout>
         </FlowLayout>;
     } });

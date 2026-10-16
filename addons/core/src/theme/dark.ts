@@ -1,3 +1,5 @@
+import { IconTextures } from "./icons";
+
 /** Shared design tokens for LumaUI's dark appearance. */
 export const darkTheme = {
     colors: {
@@ -9,4 +11,5 @@ export const darkTheme = {
         accent: { r: 0.4, g: 0.75, b: 1, a: 1 },
     },
     spacing: { panelPadding: 6 },
+    icons: IconTextures,
 } as const;

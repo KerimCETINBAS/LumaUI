@@ -64,9 +64,11 @@ export class PropertyEditor {
     }
     public category = "Size & spacing";
     public bindingPath = "";
+    public itemsExpression = "";
     public binding: BindingField = "source";
     public values: Record<string, string> = {};
     private baseline: Record<string, string> = {};
+    private baselineItems = "";
     private props: Properties = {};
     private inputs = new Map<string, () => string>();
     public constructor(private readonly draft: EditorDraft) {}
@@ -105,13 +107,15 @@ export class PropertyEditor {
             this.values[field.path.join(".")] = text; this.baseline[field.path.join(".")] = text;
         }
         this.bindingPath = this.draft.Selected.sourcePath ?? "";
+        this.itemsExpression = this.draft.Selected.items ?? 'KnownSpells("Seal*")'; this.baselineItems = this.itemsExpression;
     }
     public Capture(key: string, read: () => string): () => void {
-        this.inputs.set(key, read); return () => { if (this.inputs.get(key) === read) this.inputs.delete(key); };
+        this.inputs.set(key, read); return () => { if (this.inputs.get(key) === read) { if (key === "$path") this.bindingPath = read(); else if (key === "$items") this.itemsExpression = read(); else this.values[key] = read(); this.inputs.delete(key); } };
     }
-    public Flush(): void { for (const [key, read] of this.inputs) { if (key === "$path") this.bindingPath = read(); else this.values[key] = read(); } }
+    public Flush(): void { for (const [key, read] of this.inputs) { if (key === "$path") this.bindingPath = read(); else if (key === "$items") this.itemsExpression = read(); else this.values[key] = read(); } }
     public Bind(name?: string): void { this.Flush(); this.draft.BindSource(name, this.binding, this.binding === "source" ? this.bindingPath : undefined); this.Open(); }
-    public Save(): void {
+    public get HasChanges(): boolean { this.Flush(); return this.nodeId === this.draft.selected && (Object.keys(this.values).some(key => this.values[key] !== this.baseline[key]) || this.bindingPath !== (this.draft.Selected.sourcePath ?? "") || this.itemsExpression !== this.baselineItems); }
+    public Save(): boolean {
         this.Flush();
         try {
             const props = clone(this.props) as Properties;
@@ -137,7 +141,7 @@ export class PropertyEditor {
                     for (const key of ["r","g","b"]) if (value[key] === undefined) value[key] = 1;
                 }
             }
-            this.draft.UpdateProperties(props); this.Open();
-        } catch (failure) { this.draft.Report(String(failure)); }
+            this.draft.UpdateProperties(props, this.bindingPath, this.itemsExpression === this.baselineItems ? undefined : this.itemsExpression); this.Open(); return true;
+        } catch (failure) { this.draft.Report(String(failure)); return false; }
     }
 }

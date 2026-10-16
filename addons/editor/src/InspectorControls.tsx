@@ -4,6 +4,7 @@ import type { PropertyRule } from "lumaui/core";
 import { Cell, FlowLayout, Button, Label, TextInput, Background, Border, ScrollHost } from "wuira/ui";
 import { Dropdown } from "./Dropdown";
 import { Core } from "./core";
+import { IconButton, actionIcon } from "./IconButton";
 export const colors = Core.Theme.colors;
 export const labels: Record<string, string> = {
     width: "Width", height: "Height", margin: "Outer spacing", padding: "Inner spacing", mode: "Positioning",
@@ -20,10 +21,16 @@ export const labels: Record<string, string> = {
     healPredictionSource: "Track incoming heals", healPredictionResource: "Track incoming heals", absorbPredictionResource: "Track absorbs",
     activeAlpha: "Opacity while active", inactiveAlpha: "Opacity while inactive", source: "Parent source", channel: "Channel name",
     tileX: "Repeat horizontally", tileY: "Repeat vertically", blendMode: "Blend mode", thickness: "Thickness", radius: "Corner radius",
+    selectors: "Spell filters", includePassive: "Include passive spells",
+    scope: "Group scope", pets: "Include pets", key: "Stable member key", groupBy: "Group columns by", wrapAfter: "Members per column",
+    unitWatch: "Hide absent units", classBorder: "Use class border color", classBackground: "Use class background color", field: "Displayed field", category: "Aura category", maxIcons: "Maximum icons", iconSize: "Icon size", compartmentBorder: "Active compartment border", hoverBackground: "Hover background",
     top: "Top", right: "Right", bottom: "Bottom", left: "Left", r: "Red", g: "Green", b: "Blue", a: "Opacity",
     type: "Action type", spell: "Spell name or ID", item: "Item name or ID", macro: "Macro name or number", slot: "Action slot",
 };
 const choices: Record<string, string> = {
+    auto: "Party or raid", party: "Party", raid: "Raid", group: "Raid subgroup", key: "Member identity",
+    buffs: "Buffs", dispellable: "Dispellable debuffs", movement: "Movement effects", other: "Other debuffs",
+    name: "Name", health: "Health", percent: "Health percent", role: "Role", leader: "Group leader",
     horizontal: "Horizontal", vertical: "Vertical", fixed: "Fixed size", content: "Fit to contents", absolute: "Screen", relative: "Relative to parent",
     start: "Start", center: "Center", end: "End", TOPLEFT: "Top left", TOP: "Top", TOPRIGHT: "Top right", LEFT: "Left", CENTER: "Center",
     RIGHT: "Right", BOTTOMLEFT: "Bottom left", BOTTOM: "Bottom", BOTTOMRIGHT: "Bottom right", HELPFUL: "Buffs", HARMFUL: "Debuffs",
@@ -31,11 +38,13 @@ const choices: Record<string, string> = {
 };
 export function friendly(value: string): string { return choices[value] ?? labels[value] ?? value; }
 export function sourceType(value: string): string {
-    const names: Record<string, string> = { hp: "Health", mana: "Mana", aura: "Buff / debuff", spell: "Spell", gcd: "Global cooldown", cooldown: "Spell cooldown", cast: "Cast timer", swing: "Swing timer", totem: "Totem timer", channel: "Source channel" };
+    const names: Record<string, string> = { knownSpells: "Known spells", hp: "Health", mana: "Mana", power: "Primary resource", groupMembers: "Party / raid members", aura: "Buff / debuff", spell: "Spell", gcd: "Global cooldown", cooldown: "Spell cooldown", cast: "Cast timer", swing: "Swing timer", totem: "Totem timer", channel: "Source channel" };
     return names[value] ?? value;
 }
 export function Action({ text, onClick, width }: { text: string; onClick(): void; width: number }) {
-    return <Button width={width} height={28} onClick={onClick} decorations={{ background: new Background({ color: colors.border }) }}><Label text={text} align="CENTER" fontSize={11} /></Button>;
+    if (width < 76) return <Button width={width} height={28} onClick={onClick}
+        decorations={{ background: new Background({ color: colors.border }) }}><Label text={text} align="CENTER" fontSize={11} /></Button>;
+    return <IconButton width={width} text={text} icon={actionIcon(text)} onClick={onClick} />;
 }
 export function Heading({ text, width }: { text: string; width: number }) {
     return <Label width={width} height={28} text={text} fontSize={12} color={colors.accent} margin={{ top: 6 }} />;
@@ -95,22 +104,25 @@ export function ColorFields({ state, name, title, width }: { state: FormState; n
         </FlowLayout>
     </FlowLayout>;
 }
-export function ScrollForm({ width, height, rows, offset, remember, onViewport, hint = "Scroll for more settings" }: { width: number; height: number; rows: View[]; offset: number; remember(offset: number): void; onViewport?(scroll: ScrollHost): void | (() => void); hint?: string }) {
-    let scroll: ScrollHost | undefined;
-    return <FlowLayout width={width} height={height} gap={4}>
-        <Cell width={width} height={Math.max(40, height - 24)} onMount={host => {
-            const viewport = new ScrollHost(host, remember); scroll = viewport;
-            let content: wuiraNativeFrame | undefined; let cleanup: void | (() => void);
-            try {
-                content = wuira.Mount(<FlowLayout width={width - 8} height={0} sizing="content" gap={8}>{rows}</FlowLayout>, undefined, viewport.Frame);
-                viewport.SetContent(content!, offset); cleanup = onViewport?.(viewport);
-            } catch (failure) { viewport.Dispose(); if (content !== undefined) wuira.Unmount(content); throw failure; }
-            return () => { cleanup?.(); if (content !== undefined) wuira.Unmount(content); viewport.Dispose(); if (scroll === viewport) scroll = undefined; };
-        }} />
-        <FlowLayout height={20} direction="horizontal" gap={4}>
-            <Button width={28} onClick={() => scroll?.ScrollBy(-120)}><Label text="^" fontSize={11} /></Button>
-            <Label width={width - 64} text={hint} align="CENTER" color={colors.muted} fontSize={9} />
-            <Button width={28} onClick={() => scroll?.ScrollBy(120)}><Label text="v" fontSize={11} /></Button>
-        </FlowLayout>
-    </FlowLayout>;
+export function ScrollForm({ width, height, rows, offset, remember, onViewport, gap = 8 }: { width: number; height: number; rows: View[]; offset: number; remember(offset: number): void; onViewport?(scroll: ScrollHost): void | (() => void); hint?: string; gap?: number }) {
+    return <Cell width={width} height={Math.max(40, height)} onMount={host => {
+        const thumb = host.CreateTexture(undefined, "OVERLAY");
+        thumb.SetColorTexture(colors.accent.r, colors.accent.g, colors.accent.b, .55);
+        let viewport: ScrollHost;
+        const update = (value: number) => {
+            remember(value);
+            const range = viewport.Frame.GetVerticalScrollRange(), available = host.GetHeight();
+            if (range <= 0) { thumb.Hide(); return; }
+            const size = Math.max(18, available * available / (available + range));
+            thumb.SetSize(3, size); thumb.ClearAllPoints();
+            thumb.SetPoint("TOPRIGHT", host, "TOPRIGHT", -1, -(available - size) * value / range); thumb.Show();
+        };
+        viewport = new ScrollHost(host, update);
+        let content: wuiraNativeFrame | undefined; let cleanup: void | (() => void);
+        try {
+            content = wuira.Mount(<FlowLayout width={width - 12} height={0} sizing="content" gap={gap}>{rows}</FlowLayout>, undefined, viewport.Frame);
+            viewport.SetContent(content!, offset); cleanup = onViewport?.(viewport);
+        } catch (failure) { viewport.Dispose(); thumb.Hide(); if (content !== undefined) wuira.Unmount(content); throw failure; }
+        return () => { cleanup?.(); if (content !== undefined) wuira.Unmount(content); viewport.Dispose(); thumb.Hide(); };
+    }} />;
 }

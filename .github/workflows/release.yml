@@ -26,12 +26,13 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - run: npm ci --ignore-scripts
       - name: Validate version and changelog
         run: npm run release:check
         env:
           RELEASE_TAG: ${{ github.ref_name }}
-      - run: npm ci --ignore-scripts
       - run: npm run check
+      - run: npm run build
       - run: npm test
       - name: Build, integration test and package all addons
         run: npm run build:release

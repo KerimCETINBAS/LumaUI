@@ -1,7 +1,7 @@
 import { FrameMover, KeybindCapture } from "wuira/ui";
 import type { LumaCoreAPI, EditMode, LumaModule, PresetDocument, PresetInstance, PresetNode } from "../core/contract";
 import type { Presets } from "./Presets";
-import { BuilderSettings } from "./Library";
+import { positionRoot } from "./LayoutPosition";
 
 /** Editing targets follow mounted collection IDs; no player/hotbar-specific renderer is involved. */
 export class CollectionControls implements LumaModule {
@@ -17,7 +17,7 @@ export class CollectionControls implements LumaModule {
             const dependencies = new Map((document.dependencies ?? []).map(doc => [doc.id, doc]));
             this.Visit(document.root, (node, key, owner) => {
                 const frame = instance.Nodes.get(key);
-                if (node.type === "secureButton" && frame !== undefined) bindings.push(this.capture.AddTarget(frame, key => this.SetBinding(owner, node.id, key)));
+                if (node.type === "secureButton" && frame !== undefined && node.props.clickCastPreset === undefined && node.props.unit === undefined) bindings.push(this.capture.AddTarget(frame, key => this.SetBinding(owner, node.id, key)));
             }, "", document.id, dependencies);
             this.RefreshMover(document.id);
             this.capture.SetActive(this.mode === "keys");
@@ -35,7 +35,6 @@ export class CollectionControls implements LumaModule {
             if (doc !== undefined) this.Visit(doc.root, action, prefix + node.id + "/", doc.id, documents);
         }
     }
-    private VisitOwn(node: PresetNode, action: (node: PresetNode) => void): void { action(node); for (const child of node.children ?? []) this.VisitOwn(child, action); }
     public SetMode(mode: EditMode): void {
         this.mode = mode; this.capture.SetActive(mode === "keys");
         for (const id of this.active.keys()) this.RefreshMover(id);
@@ -44,34 +43,23 @@ export class CollectionControls implements LumaModule {
         this.movers.get(id)?.Dispose(); this.movers.delete(id);
         const active = this.active.get(id);
         if (this.mode !== "unlock" || active?.instance.Frame === undefined || InCombatLockdown()) return;
+        const layoutKey = this.presets.Layouts.Status === "ready" ? this.presets.Layouts.Active?.key : undefined;
         this.movers.set(id, new FrameMover(active.instance.Frame, { label: active.document.name, onMove: position => {
             const document = this.presets.Get(id); if (document === undefined) return;
-            const positionRoot = (node: PresetNode): PresetNode | undefined => {
-                if (node.type !== "fragment") return node;
-                for (const child of node.children ?? []) { const candidate = positionRoot(child); if (candidate !== undefined && candidate.type !== "hideUnitFrame") return candidate; }
-                return undefined;
-            };
             const root = positionRoot(document.root); if (root === undefined) return;
-            root.props = { ...root.props, mode: "absolute", anchor: "CENTER", relativeAnchor: "CENTER", x: Math.round(position.x), y: Math.round(position.y) };
-            delete root.props.offset;
+            const key = layoutKey;
+            if (key !== undefined) {
+                document.layoutPositions = { ...document.layoutPositions, [key]: { x: Math.round(position.x), y: Math.round(position.y) } };
+            } else {
+                root.props = { ...root.props, mode: "absolute", anchor: "CENTER", relativeAnchor: "CENTER", x: Math.round(position.x), y: Math.round(position.y) };
+                delete root.props.offset; delete root.props.relativeTo;
+            }
             this.presets.Save(document, true);
         } }));
     }
     private SetBinding(id: string, nodeId: string, key: string | undefined): void {
         if (InCombatLockdown()) return;
-        const enabled = this.core.Store.get(BuilderSettings).enabled;
-        for (const document of this.presets.List()) {
-            let changed = false;
-            this.VisitOwn(document.root, node => {
-                if (node.type !== "secureButton") return;
-                if (document.id === id && node.id === nodeId) { if (key === undefined) delete node.props.binding; else node.props.binding = key; changed = true; }
-                else if (key !== undefined && node.props.binding === key) { delete node.props.binding; changed = true; }
-            });
-            if (!changed) continue;
-            this.presets.Save(document, enabled.includes("preset:" + document.id));
-            if (this.active.has(document.id)) this.presets.Mount(document);
-
-        }
+        this.presets.SetBinding(id, nodeId, key);
     }
     public Reset(): void { this.SetMode("locked"); }
 }

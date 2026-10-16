@@ -1,58 +1,70 @@
 import { UI } from "wuira";
-import { FlowLayout, Cell, Button, Label, Background, Border } from "wuira/ui";
+import { FlowLayout, Cell, Background, Border, Tooltip } from "wuira/ui";
 import type { CustomizationContext } from "lumaui/core";
 import { Core } from "./core";
-import type { EditorDraft, NodeKind } from "./Draft";
-
-import { Dropdown } from "./Dropdown";
+import type { EditorDraft } from "./Draft";
+import { ComponentTitle } from "./ComponentTitle";
+import { IconButton } from "./IconButton";
 import { Hierarchy } from "./Hierarchy";
 import { PropertyInspector } from "./PropertyInspector";
 import { SourceInspector } from "./SourceInspector";
+import { CollectionInspector } from "./CollectionInspector";
 import { mountPreview } from "./Preview";
-
+import { Toolbox } from "./Toolbox";
+import { describeNode } from "./NodePresentation";
+import { SingleLine } from "./SingleLine";
 const colors = Core.Theme.colors;
-function Control({ text, onClick, width = 82 }: { text: string; onClick: () => void; width?: number }) {
-    return <Button width={width} height={28} onClick={onClick}
-        decorations={{ background: new Background({ color: colors.border }) }}>
-        <Label text={text} align="CENTER" fontSize={11} color={colors.text} />
-    </Button>;
+function Tab({ text, active, width, onClick }: { text: string; active: boolean; width: number; onClick(): void }) {
+    const icons: Record<string, string> = { Properties: "inspector", Component: "component", Sources: "sources" };
+    return <IconButton width={width} text={text} icon={icons[text] ?? text.toLowerCase()} active={active} quiet onClick={onClick} />;
 }
 export function EditorView({ draft, width, height }: CustomizationContext & { draft: EditorDraft }) {
-    const treeWidth = 170;
-    const inspectorWidth = Math.min(340, Math.max(280, width * .38));
+    const design = draft.workspaceView === "design";
+    const treeWidth = Math.min(260, Math.max(170, width * .24));
+    const inspectorWidth = Math.min(340, Math.max(240, width * .31));
     const canvasWidth = Math.max(100, width - treeWidth - inspectorWidth - 24);
-    const workspaceHeight = Math.max(180, height - 128);
-    return <FlowLayout width={width} height={height} gap={8}>
-        <Label height={28} text="Visual Editor" fontSize={22} />
-        <Label height={20} text="Create a preset, bind sources, then Apply or share. Inactive sources use sample visuals." fontSize={11} color={colors.muted} />
-        <FlowLayout height={28} direction="horizontal" gap={6}>
-            <Dropdown text="Add element" width={130} options={[{label:"Cell",value:"cell"},{label:"Flow layout",value:"flow"},{label:"Progress",value:"progress"},{label:"Action",value:"action"},{label:"Headless group",value:"fragment"},{label:"Hide native unit frame",value:"hideUnitFrame"}]} onSelect={kind => draft.Add(kind)} />
-            <Dropdown text="Add preset" width={140} options={Core.Presets.List().filter(doc => doc.id !== draft.documentId).map(doc => ({label:doc.name,value:doc.id}))} onSelect={id => draft.Embed(id)} />
-            <Dropdown text="New" width={80} options={[{label:"Visual preset",value:"visual"},{label:"Headless preset",value:"headless"}]} onSelect={value => draft.New(value === "headless")} />
-            <Control text="Save" width={60} onClick={() => draft.Save()} />
-            <Control text="Apply" width={60} onClick={() => draft.Apply()} />
-            <Control text="Import" width={60} onClick={() => draft.Import()} />
-            <Control text="Export" width={60} onClick={() => draft.Export()} />
+    const workspaceHeight = Math.max(180, height - 144);
+    const path = draft.Path().map(node => describeNode(draft, node).title).join(" / ");
+    const preview = (w: number) => <FlowLayout width={w} height={workspaceHeight} gap={4}>
+        <SingleLine width={w} height={20} text="PREVIEW · 1:1 · Click an element to select it" size={10} color={colors.muted} />
+        <Cell width={w} height={workspaceHeight - 44} padding={12} onMount={frame => {
+            frame.SetClipsChildren(true);
+            return mountPreview(frame, draft.Document(), draft.selected, id => draft.Select(id), draft.nodes);
+        }} decorations={{ background: new Background({ color: { r: .012, g: .018, b: .028, a: 1 } }), border: new Border({ thickness: 1, color: colors.border }) }} />
+        <Cell width={w} height={16} decorations={{ tooltip: new Tooltip({ text: path }) }}>
+            <SingleLine width={w} height={16} text={path} size={9} color={colors.accent} />
+        </Cell>
+    </FlowLayout>;
+    const inspector = (w: number) => <FlowLayout width={w} height={workspaceHeight} padding={8} gap={8} decorations={{ background: new Background({ color: colors.surface }) }}>
+        <FlowLayout height={28} direction="horizontal" gap={4}>
+            <Tab width={(w - 24) / 3} text="Properties" active={draft.inspector === "properties"} onClick={() => draft.SetInspector("properties")} />
+            <Tab width={(w - 24) / 3} text="Component" active={draft.inspector === "collection"} onClick={() => draft.SetInspector("collection")} />
+            <Tab width={(w - 24) / 3} text="Sources" active={draft.inspector === "sources"} onClick={() => draft.SetInspector("sources")} />
         </FlowLayout>
-        <Label height={20} text={(draft.dirty ? "Unsaved  |  " : "Saved  |  ") + draft.message} fontSize={10} color={colors.accent} />
+        {draft.inspector === "collection" ? <CollectionInspector draft={draft} width={w - 16} height={workspaceHeight - 52} />
+            : draft.inspector === "sources" ? <SourceInspector draft={draft} width={w - 16} height={workspaceHeight - 52} />
+            : <PropertyInspector draft={draft} width={w - 16} height={workspaceHeight - 52} />}
+    </FlowLayout>;
+    return <FlowLayout width={width} height={height} gap={8}>
+        <FlowLayout height={28} direction="horizontal" gap={8}>
+            <SingleLine width={150} height={28} text="Visual Editor" size={20} color={colors.text} />
+            <ComponentTitle draft={draft} width={Math.max(160, width - 250)} />
+            <IconButton width={84} text="Save" icon="save" active hint="Save changes and update the component in the game" onClick={() => draft.Commit()} />
+        </FlowLayout>
+        <Toolbox draft={draft} width={width} />
+        <FlowLayout height={28} direction="horizontal" gap={6}>
+            <Tab width={92} text="Design" active={design} onClick={() => draft.SetWorkspace("design")} />
+            <Tab width={92} text="Preview" active={draft.workspaceView === "preview"} onClick={() => draft.SetWorkspace("preview")} />
+            <Tab width={92} text="Hierarchy" active={draft.workspaceView === "hierarchy"} onClick={() => draft.SetWorkspace("hierarchy")} />
+            <Tab width={92} text="Inspector" active={draft.workspaceView === "inspector"} onClick={() => draft.SetWorkspace("inspector")} />
+            <Cell width={Math.max(100, width - 392)} height={28} decorations={{ tooltip: new Tooltip({ text: draft.message }) }}>
+                <SingleLine width={Math.max(100, width - 392)} height={28} text={(draft.dirty ? "Unsaved · " : "Saved · ") + draft.message} size={10} color={colors.accent} />
+            </Cell>
+        </FlowLayout>
         <FlowLayout height={workspaceHeight} direction="horizontal" gap={12}>
-            <Hierarchy draft={draft} width={treeWidth} height={workspaceHeight} />
-            <Cell width={canvasWidth} padding={12} onMount={frame => {
-                    frame.SetClipsChildren(true);
-                    return mountPreview(frame, draft.Document(), draft.selected);
-                }}
-                decorations={{ background: new Background({ color: { r: 0.012, g: 0.018, b: 0.028, a: 1 } }),
-                    border: new Border({ thickness: 1, color: colors.border }) }}
-            />
-            <FlowLayout width={inspectorWidth} padding={8} gap={8}
-                decorations={{ background: new Background({ color: colors.surface }) }}>
-                <FlowLayout height={24} direction="horizontal" gap={4}>
-                    <Button width={(inspectorWidth - 20) / 2} onClick={() => draft.SetInspector("properties")}><Label text="Properties" fontSize={10} color={draft.inspector === "properties" ? colors.accent : colors.muted} /></Button>
-                    <Button width={(inspectorWidth - 20) / 2} onClick={() => draft.SetInspector("sources")}><Label text="Sources" fontSize={10} color={draft.inspector === "sources" ? colors.accent : colors.muted} /></Button>
-                </FlowLayout>
-                {draft.inspector === "sources" ? <SourceInspector draft={draft} width={inspectorWidth - 16} height={workspaceHeight - 48} />
-                    : <PropertyInspector draft={draft} width={inspectorWidth - 16} height={workspaceHeight - 48} />}
-            </FlowLayout>
+            {design ? <Hierarchy draft={draft} width={treeWidth} height={workspaceHeight} /> : []}
+            {design ? preview(canvasWidth) : draft.workspaceView === "preview" ? preview(width) : []}
+            {design ? inspector(inspectorWidth) : draft.workspaceView === "inspector" ? inspector(width) : draft.workspaceView === "hierarchy" ? <Hierarchy draft={draft} width={width} height={workspaceHeight} /> : []}
         </FlowLayout>
     </FlowLayout>;
 }

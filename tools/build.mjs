@@ -4,6 +4,8 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import { root, addons } from "./config.mjs";
+import { generateBuiltinPresets } from "./generate-builtin-presets.mjs";
+import { buildIconAssets } from "./build-icons.mjs";
 const require = createRequire(import.meta.url);
 export function run(command, args, options = {}) {
     const result = spawnSync(command, args, { stdio: "inherit", ...options });
@@ -11,6 +13,8 @@ export function run(command, args, options = {}) {
     if (result.status !== 0) throw new Error(command + " exited with status " + result.status);
 }
 export function buildAddons(outputRoot) {
+    generateBuiltinPresets();
+    const iconAssets = buildIconAssets();
     const version = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version;
     const cli = path.join(path.dirname(require.resolve("wuira/package.json")), "cli/wuira.mjs");
     for (const addon of addons) {
@@ -19,6 +23,9 @@ export function buildAddons(outputRoot) {
         const content = fs.readFileSync(toc, "utf8");
         if (!/^## Version: .+$/m.test(content)) throw new Error("TOC is missing its version: " + toc);
         fs.writeFileSync(toc, content.replace(/^## Version: .+$/m, "## Version: " + version));
+        if (addon.name === "LumaUI") fs.cpSync(iconAssets, path.join(outputRoot, addon.name, "media/icons"), { recursive: true });
+        if (addon.name === "LumaUI" && fs.existsSync(path.join(root, "presets")))
+            fs.cpSync(path.join(root, "presets"), path.join(outputRoot, addon.name, "presets"), { recursive: true });
     }
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

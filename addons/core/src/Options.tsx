@@ -7,7 +7,7 @@ import { CustomizationWindow } from "./CustomizationWindow";
 import { installMinimapLauncher } from "./MinimapLauncher";
 import type { CustomizationPage } from "./core/contract";
 import { darkTheme } from "./theme/dark";
-import type { EditMode, LumaModule, LegacyActionSettings } from "./core/contract";
+import type { EditMode, LumaModule } from "./core/contract";
 
 function Control({ text, onClick }: { text: string; onClick: () => void }) {
     return <Button width={280} height={34} onClick={onClick}
@@ -45,7 +45,7 @@ function EditToolbar({ options }: { options: LumaOptions }) {
     </Cell>;
 }
 
-/** Shared editing policy and player placement. Feature addons own their controls. */
+/** Shared editing policy. Feature addons own their controls. */
 export class LumaOptions {
     public readonly store = new StoreRegistry({ addon: "LumaUI", variable: "LumaUISettings" });
     private mode: EditMode = "locked";
@@ -100,21 +100,11 @@ export class LumaOptions {
             else if (command === "bind" || command === "keybind") this.SetMode("keys");
             else if (command === "lock") this.SetMode("locked");
             else if (command === "reset") this.Reset();
-            else this.OpenCustomization(command === "" ? undefined : command);
+            else this.OpenCustomization(["builtins", "starters"].includes(command) ? "builtin-presets" : command === "actions" ? "library" : command === "" ? undefined : command);
         };
         wuira.registerCommand("/luma", command);
         wuira.registerCommand("/lumaui", command);
         installMinimapLauncher(() => this.OpenCustomization());
-    }
-
-    /** A one-time import bridge for settings saved before ActionBars became an addon. */
-    public GetLegacyActionSettings(): LegacyActionSettings {
-        const settings = this.Settings as LumaSettings & {
-            actionPosition?: LegacyActionSettings["position"];
-            bindings?: Readonly<Record<string, string>>;
-        };
-        return { position: settings.actionPosition, bindings: settings.bindings,
-            playerPosition: settings.playerPosition, playerHeight: 85 };
     }
 
     public SetMode(mode: EditMode): void {

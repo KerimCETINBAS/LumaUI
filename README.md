@@ -1,93 +1,87 @@
 # LumaUI
 
-A customizable UI builder for WoW Forever, powered by [wuira](https://www.npmjs.com/package/wuira).
+**Build an interface that fits the way you play.**
 
-LumaUI turns saved presets into native WoW widgets. Compose resource displays, cooldown buttons and reusable layouts, customize registered Blizzard frames, and share a complete preset with one import string. Character settings and collections persist through SavedVariables.
+LumaUI is an in-game UI builder for **WoW Forever**. Create resource displays, cooldown buttons and party or raid layouts, arrange them on your screen, and share your work with a single import string.
 
-## What it provides
+Start with a built-in preset or a blank canvas. Shape it in the visual editor, connect it to game data, and save it as a reusable component.
 
-- **Preset engine:** registered component and source factories create native UI trees from data.
-- **Reusable collections:** reference another preset; exported strings include its transitive dependencies. Each imported dependency remains a separate library item with a **Used by** marker.
-- **Headless presets:** apply behavior without drawing a widget, such as hiding the native player frame. Effects are disabled in editor previews and released when their owner is removed.
-- **Native skins:** customize supported Blizzard frames through registered adapters.
-- **Shared dashboard and theme:** one customization window, character settings, layout unlock and keybind modes.
-- **Optional visual editor:** actual-size preview, a scrollable drag/drop hierarchy, grouped property forms and editable data sources.
-- **Optional action bars:** a saved spell-button starter collection, secure bindings and native action-bar controls.
+[Download](https://github.com/kerimcetinbas/LumaUI/releases) · [Editor guide](https://github.com/kerimcetinbas/LumaUI/blob/main/addons/editor/README.md) · [Changelog](CHANGELOG.md) · [Report an issue](https://github.com/kerimcetinbas/LumaUI/issues)
 
-wuira is the separate TypeScript/JSX framework and toolchain. LumaUI is the addon runtime and preset engine built on it.
+LumaUI is in active development, with WoW Forever as its current compatibility target.
+
+## Make the information yours
+
+Put health, resources, buffs, casts and cooldowns where they make sense for you. Combine bars, text, icons and buttons with flow or grid layouts. Adjust their size, spacing, textures and colors in the editor.
+
+Build one party member template and repeat it across the group. Create a spell-button template and populate it from your learned spells using name filters. Reuse a component inside another component to keep related displays consistent.
+
+## Design while you play
+
+The optional visual editor gives your work the full configuration workspace:
+
+- A ribbon of element tools and reusable components, with a textbox to filter your library.
+- A collapsible hierarchy with drag-and-drop ordering and nesting.
+- An actual-size preview with click-to-select.
+- Organized properties, editable data sources and activation rules.
+- One **Save** action to keep your changes and update the live component.
+
+Use **Unlock** to position your components on the game screen. Choose when they load by class, party or raid state, or the active native Edit Mode layout.
+
+## Give each click a purpose
+
+Turn a spell into a cooldown button, assign a key, or attach a named Click Cast preset to a unit button. Search your character's learned spells, usable items, consumables and macros when choosing an action.
+
+A Click Cast preset can hold multiple mouse and modifier combinations and be reused across buttons. The built-in **Standard** preset provides left-click selection and a right-click unit menu.
+
+## Share what you build
+
+Export a component as one string. Its nested components and named Click Cast dependencies travel with it, and appear as separate reusable entries in the receiving library.
+
+Keyboard bindings stay in character settings and are excluded from sharing by default. You can include them explicitly; when assignments conflict, choose to replace them, import without keys, or skip conflicts.
+
+Components can also carry behavior without a visible widget. For example, a custom player display can include a separate component that hides the native player frame and restores it when the last owner is disabled.
 
 ## Install
 
-Download **LumaUI-<version>.zip** from this repository's GitHub Releases and extract it into your WoW Forever client's `Interface/AddOns` directory. The archive contains:
+Download the compiled **LumaUI-<version>.zip** asset from [GitHub Releases](https://github.com/kerimcetinbas/LumaUI/releases) and extract its addon folders into your client's `Interface/AddOns` directory:
 
 ```text
 Interface/AddOns/
   LumaUI/LumaUI.toc
   LumaUI_Editor/LumaUI_Editor.toc
-  LumaUI_ActionBars/LumaUI_ActionBars.toc
 ```
 
-Enable **LumaUI** in the addon list. **LumaUI.Editor** and **LumaUI.ActionBars** can be enabled independently; both require the master addon. Reload the UI after an update. The release contains compiled Lua and needs no Node.js installation in the game environment.
+Enable the modules you want in the game's addon list, then reload.
 
-## Use
-
-Open `/luma`, the L launcher beside the minimap, or the LumaUI entry in game options.
-
-| Command | Behavior |
+| Addon | What it adds |
 | --- | --- |
-| `/luma` | Open the customization dashboard. |
-| `/luma unlock` | Drag mounted collections to change their position. |
-| `/luma bind` | Hover a secure button and press a key; Delete clears its binding. |
-| `/luma lock` | Finish layout or keybind editing. |
+| **LumaUI** | Component library, import/export, Click Cast presets, shared settings and customization dashboard. |
+| **LumaUI.Editor** | Visual tools for creating and editing components. Requires LumaUI. |
 
-In **UI Library**, apply, disable, edit, import or export a collection. **Export** selects its share string; press **Ctrl+C** to copy it. With the Editor enabled, use **New** to create a visual or headless preset, **Add preset** to insert a reusable dependency, and **Apply** to save and mount the result. **Save** retains the working draft.
+Release files contain the compiled addon. Players do not need Node.js or a separate wuira installation.
 
-The player panel and optional action-bar starter are seeded once. Later reloads use your saved collections instead of regenerating their layouts. ActionBars offers an explicit starter reset. Clearing or restoring native bar slots remains an explicit ActionBars command. Layout changes and native mutations run outside combat.
+When upgrading from a build that included **LumaUI.ActionBars**, remove the old `LumaUI_ActionBars` folder. Saved action components and character bindings continue through the core. The `/lumarestorebars` command remains available to restore an existing native slot backup.
 
-See the [Builder API](docs/builder.md), [Editor guide](addons/editor/README.md), [ActionBars guide](addons/actionbars/README.md) and [changelog](CHANGELOG.md).
+## Your first component
 
-## Monorepo
+1. Open **`/luma`**, the **L** launcher beside the minimap, or LumaUI in game options.
+2. Open **Built-in presets**, choose a starter and confirm **Import**. Imported components start disabled; enable the one you want in **UI Library**.
+3. With the Editor enabled, choose **Edit**, customize the component and press **Save**. To start from scratch, use **New blank**, **New party**, **New raid**, **New spell list** or **New headless** in UI Library.
+4. Use **`/luma unlock`** to move it, **`/luma bind`** to assign keys, and **`/luma lock`** to finish.
 
-```text
-addons/
-  core/         LumaUI master and shared lumaui/core contract
-  editor/       Optional visual editor
-  actionbars/   Optional action-bar collection and native bar controls
-tools/          Shared build and release scripts
-tests/          Emitted-Lua runtime and cross-addon integration checks
-docs/           Preset and skin API documentation
-```
+Built-in presets are optional imports. Your saved layouts, activation rules and bindings remain your own as the addon develops. The party and raid starters currently include Paladin click actions; choose the spells and ranks you want in **Click Cast**.
 
-npm workspaces link the Editor and ActionBars directly to the master's current types. wuira stays an external dependency, outside this repository. The current framework preview is pinned in `.packages/wuira-encoding-20261015.tgz`; keep that file committed with `package-lock.json` so a clean checkout can build the same version.
+For a solo preview of a group component, enable it and choose **Always** in the editor's **Component** tab, then **Save**. Use **Condition met** to follow its normal loading rules. Make layout and binding changes outside combat.
 
-## Development
+**Export** in UI Library selects the share string; press **Ctrl+C** to copy it. Settings are saved per character through the game's SavedVariables system.
 
-Use Node.js 22.13 or newer and run commands from the repository root:
+## Follow the project
 
-```sh
-npm ci
-npm run check
-npm test
-npm run build
-npm run test:integration
-```
+See the [editor guide](https://github.com/kerimcetinbas/LumaUI/blob/main/addons/editor/README.md) and [changelog](CHANGELOG.md). When reporting an issue, include your LumaUI version, client build, steps to reproduce and any Lua error.
 
-`npm run build` compiles all three addons into `dist/<addon-name>`. The tests run emitted Lua against mocked native APIs; in-game testing remains part of development.
+LumaUI is built with [wuira](https://www.npmjs.com/package/wuira), the separate TypeScript/JSX framework. Developers can extend it through registered components, sources, list helpers and native skin adapters. See [development and releases](docs/development.md) and the [Builder API](docs/builder.md).
 
-For local game installation, copy `lumaui.local.example.mjs` to `lumaui.local.mjs`, set `outputRoot` to your client's `Interface/AddOns` directory, then run `npm run deploy`. This local file is ignored by Git. The environment variable `LUMAUI_OUTPUT_ROOT` can also select an output directory.
+Our next distribution milestone is a tested CurseForge release. The [release preparation plan](docs/release-readiness.md) tracks the remaining presentation, onboarding and compatibility work.
 
-## Releases
-
-`npm run build:release` builds clean standalone addon folders, runs their integration checks, then writes `artifacts/LumaUI-<version>.zip`, `SHA256SUMS` and release notes. Windows uses PowerShell's archive support; Linux and macOS use `zip`.
-
-All addon workspaces share one release version. For a subsequent release:
-
-1. Run `npm version patch --workspaces --include-workspace-root --no-git-tag-version` (or choose a minor/major increment).
-2. Move completed changes from **Unreleased** to a matching `## [<version>] - YYYY-MM-DD` section in `CHANGELOG.md`.
-3. Commit the source, lockfile and changelog, then push a matching `v<version>` tag.
-
-The release workflow checks the tag, workspace versions and changelog; installs locked dependencies; runs type/runtime checks; and publishes one GitHub Release containing all three compiled addons and their checksum. Prerelease versions produce prereleases. The workflow uses the repository's built-in `GITHUB_TOKEN`; it does not need an npm publish token. The initial version is `0.1.0`, matching tag `v0.1.0`.
-
-## License
-
-[MIT](LICENSE).
+[MIT licensed](LICENSE).

@@ -15,10 +15,16 @@ export class SourceEditor {
     public type = "hp";
     public values: Record<string, string> = {};
     private inputs = new Map<string, () => string>();
+    private baselineName = "";
+    private baselineType = "hp";
+    private baseline: Record<string, string> = {};
+    private Accept(): void { this.baselineName = this.name; this.baselineType = this.type; this.baseline = { ...this.values }; }
+    public get HasChanges(): boolean { this.Flush(); return this.name !== this.baselineName || this.type !== this.baselineType || [...Object.keys(this.values), ...Object.keys(this.baseline)].some(key => this.values[key] !== this.baseline[key]); }
     public constructor(private readonly draft: EditorDraft) {}
+    public Reset(): void { this.inputs.clear(); this.original = undefined; this.name = ""; this.type = "hp"; this.values = {}; this.scroll = 0; this.Accept(); }
     public Capture(key: string, read: () => string): () => void {
         this.inputs.set(key, read);
-        return () => { if (this.inputs.get(key) === read) this.inputs.delete(key); };
+        return () => { if (this.inputs.get(key) === read) { if (key === "$name") this.name = read(); else this.values[key] = read(); this.inputs.delete(key); } };
     }
     public Flush(): void {
         for (const [key, read] of this.inputs) {
@@ -32,6 +38,7 @@ export class SourceEditor {
         this.type = source?.type ?? Core.Presets.SourceTypes()[0];
         this.values = {};
         for (const [key, value] of Object.entries(source?.props ?? {})) this.values[key] = this.Format(value);
+        this.Accept();
         Core.RefreshCustomization();
     }
     private NewName(): string {
@@ -42,7 +49,7 @@ export class SourceEditor {
         if (this.original !== undefined || !Core.Presets.SourceTypes().includes(type)) return;
         this.Flush(); this.inputs.clear(); this.type = type; this.values = {}; Core.RefreshCustomization();
     }
-    public Save(): void {
+    public Save(): boolean {
         this.Flush();
         try {
             const props: Properties = {};
@@ -64,8 +71,8 @@ export class SourceEditor {
             const sources = this.original === undefined ? [...this.draft.sources, source]
                 : this.draft.sources.map(existing => existing.name === this.original ? source : existing);
             this.draft.UpdateSources(sources);
-            this.original = name; this.name = name;
-        } catch (failure) { this.draft.Report(String(failure)); }
+            this.original = name; this.name = name; this.Accept(); return true;
+        } catch (failure) { this.draft.Report(String(failure)); return false; }
     }
     public Delete(): void {
         if (this.original === undefined) return;

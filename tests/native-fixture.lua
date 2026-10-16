@@ -71,9 +71,12 @@
           function text:SetJustifyV() end
           function text:SetTextColor(...) self.color={...} end
           function text:SetText(value) self.text=value end
+          function text:SetFormattedText(format,value) self.text=string.format(format,value) end
           return text
         end
         function frame:EnableMouse(enabled) self.mouseEnabled = enabled end
+        function frame:EnableMouseMotion(enabled) self.mouseMotion = enabled end
+        function frame:IsMouseMotionEnabled() return self.mouseMotion == true end
         function frame:GetWidth() return self.width end
         function frame:GetHeight() return self.height end
         function frame:RegisterEvent(event) self.events = self.events or {}; self.events[event] = true end
@@ -106,6 +109,7 @@
         function frame:GetFrameLevel() return self.frameLevel or 0 end
         function frame:SetFrameLevel(value) self.frameLevel=value end
         function frame:SetPoint(point, relative, relativePoint, x, y)
+          self.pointCalls=(self.pointCalls or 0)+1
           assert(type(point) == "string" and type(relativePoint) == "string")
           self.anchor,self.relativeAnchor = point,relativePoint
           self.relative = relative
@@ -116,6 +120,22 @@
           local texture = { layer = layer, parent = self }
           function texture:SetAllPoints(target) assert(target == self.parent) end
           function texture:SetColorTexture(r, g, b, a) self.color = {r, g, b, a} end
+          function texture:SetAlpha(value) self.alpha=value end
+          function texture:CreateAnimationGroup()
+            local group={};self.animationGroup=group
+            function group:SetLooping(value) self.looping=value end
+            function group:CreateAnimation(kind)
+              assert(kind=='Alpha');local animation={};self.animation=animation
+              function animation:SetFromAlpha(value) self.from=value end
+              function animation:SetToAlpha(value) self.to=value end
+              function animation:SetDuration(value) self.duration=value end
+              function animation:SetSmoothing(value) self.smoothing=value end
+              return animation
+            end
+            function group:Play() self.playing=true;self.plays=(self.plays or 0)+1 end
+            function group:Stop() self.playing=false;self.stops=(self.stops or 0)+1 end
+            return group
+          end
           function texture:SetTexture(path) self.path = path end
           function texture:SetVertexColor(r,g,b,a) self.color = {r,g,b,a} end
           function texture:SetBlendMode(mode) self.blend = mode end
@@ -132,11 +152,24 @@
           self.texture = texture
           return texture
         end
-        function frame:Show() self.shown = true end
-        function frame:Hide() self.shown = false end
+        function frame:Show()
+          local changed=not self.shown;self.shown=true
+          if changed then for _,hook in ipairs(self.hooks and self.hooks.OnShow or {}) do hook(self) end end
+        end
+        function frame:Hide()
+          local changed=self.shown;self.shown=false
+          if changed then for _,hook in ipairs(self.hooks and self.hooks.OnHide or {}) do hook(self) end end
+        end
         function frame:SetParent(parent) self.parent = parent end
         function frame:GetParent() return self.parent end
-        function frame:HookScript(script, handler) assert(script == "OnShow"); self.onShowHook=handler end
+        function frame:HookScript(script, handler)
+          self.hooks=self.hooks or {};self.hooks[script]=self.hooks[script] or {};table.insert(self.hooks[script],handler)
+          if script=='OnShow' then self.onShowHook=handler end
+        end
+        function frame:IsVisible() return self.shown==true and (not self.parent or not self.parent.IsVisible or self.parent:IsVisible()) end
+        function frame:GetEffectiveScale() return (self.scale or 1)*(self.parent and self.parent.GetEffectiveScale and self.parent:GetEffectiveScale() or 1) end
+        function frame:GetEffectiveAlpha() return (self.alpha or 1)*(self.parent and self.parent.GetEffectiveAlpha and self.parent:GetEffectiveAlpha() or 1) end
+        function frame:GetFrameStrata() return self.strata or 'MEDIUM' end
         function frame:ClearAllPoints() end
         function frame:SetAllPoints(parent) assert(parent == self.parent) end
         function frame:SetBackdrop(info) self.backdrop = info end
@@ -163,7 +196,10 @@ function CreateFrame(kind,name,parent,template)
   function frame:SetFont(path,size,flags) assert(type(path)=='string' and type(size)=='number' and type(flags)=='string','EditBox font flags required');return true end
   function frame:SetTextInsets() end
   function frame:SetMaxBytes(v) self.maxBytes=v end
-  function frame:SetText(v) self.text=v end
+  function frame:SetText(v)
+   self.text=v
+   if self.scripts and self.scripts.OnTextChanged then self.scripts.OnTextChanged(self,false) end
+  end
   function frame:GetText() return self.text end
   function frame:HighlightText() self.highlighted=true end
   function frame:SetFocus() self.focused=true end
@@ -173,13 +209,24 @@ function CreateFrame(kind,name,parent,template)
  if template=='SecureActionButtonTemplate' then
   frame.protected=true;frame.attributes={}
   function frame:SetAttribute(k,v) assert(not combat); self.attributes[k]=v end
-  function frame:RegisterForClicks(v) self.click=v end
+  function frame:RegisterForClicks(...) self.clicks={...}; self.click=self.clicks[1] end
   function frame:SetID(v) self.id=v end
  end
  return frame
 end
-function SetOverrideBindingClick() assert(not combat) end
-function ClearOverrideBindings() assert(not combat) end
+local overrideBindings={}
+function SetOverrideBindingClick(owner,priority,key,name,button)
+ assert(not combat);overrideBindings[owner]=overrideBindings[owner] or {}
+ overrideBindings[owner][key]={frame=_G[name],button=button}
+end
+function ClearOverrideBindings(owner) assert(not combat);overrideBindings[owner]=nil end
+local function bindingTarget(key)
+ local result
+ for _,bindings in pairs(overrideBindings) do if bindings[key] then
+  assert(result==nil,'multiple active owners for '..key);result=bindings[key].frame
+ end end
+ return result
+end
 Enum={StatusBarInterpolation={Immediate=0},StatusBarTimerDirection={RemainingTime=1},PlayerSwingType={MainHand=0,OffHand=1,Ranged=2}}
 C_SwingTimer={}
 function GetTime() return 0 end
@@ -192,3 +239,11 @@ function UnitCastingInfo() return nil end
 function UnitChannelInfo() return nil end
 
 function UIParent:GetCenter() return 0,0 end
+
+function UIParent:IsVisible() return true end
+function UIParent:GetEffectiveScale() return 1 end
+function UIParent:GetEffectiveAlpha() return 1 end
+function SetPortraitTexture(texture,unit,square)
+ assert(type(unit)=='string' and square==true)
+ texture.portraitUnit=unit;texture.portraitUpdates=(texture.portraitUpdates or 0)+1
+end

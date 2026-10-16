@@ -17,17 +17,18 @@ export function SourceInspector({ draft, width, height }: { draft: EditorDraft; 
     for (const [key, rule] of Object.entries(rules)) {
         const title = key === "healPrediction" ? "Track incoming heals" : key === "absorbPrediction" ? "Track absorbs" : friendly(key);
         rows.push(rule.type === "boolean" ? <Toggle state={state} name={key} title={title} width={w} /> : <Field state={state} name={key} title={title} rule={rule} width={w} />);
-        if (key === "unit") rows.push(<Note width={w} text="Default: player. Also target, focus, party1..." />);
+        if (key === "selectors") rows.push(<Note width={w} text={'Comma-separated filters, e.g. "Seal*", /^Blessing of .*/i. Empty means all known active spells. Names use the client language.'} />);
+        if (key === "unit") rows.push(<Note width={w} text="Default: player. Inside a repeated member template, use $unit for that member or $pet for their pet." />);
         if (rule.type === "numbers") rows.push(<Note width={w} text="Separate spell IDs with commas." />);
     }
     return <FlowLayout width={width} height={height} gap={6}>
-        <Label height={24} text="Collection sources" fontSize={12} color={colors.accent} />
+        <Label height={24} text="Component sources" fontSize={12} color={colors.accent} />
         <Dropdown width={width} text={state.original ?? "New source"} options={[{label:"New source",value:""},...draft.sources.map(source=>({label:source.name,value:source.name}))]} onSelect={value => state.Open(value === "" ? undefined : value)} />
         <ScrollForm width={width} height={height - 96} rows={rows} offset={state.scroll} remember={offset => { state.scroll = offset; }} />
         <FlowLayout height={28} direction="horizontal" gap={6}>
-            <Action width={width - 156} text="Save source" onClick={() => state.Save()} />
-            <Action width={86} text="New source" onClick={() => state.Open()} />
-            <Action width={58} text="Delete" onClick={() => state.Delete()} />
+            <Action width={width - 192} text="Update source" onClick={() => state.Save()} />
+            <Action width={104} text="New source" onClick={() => state.Open()} />
+            <Action width={76} text="Delete" onClick={() => state.Delete()} />
         </FlowLayout>
     </FlowLayout>;
 }

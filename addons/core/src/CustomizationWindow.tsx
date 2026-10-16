@@ -2,6 +2,7 @@ import { UI, wuira } from "wuira";
 import { Window, FlowLayout, Cell, Button, Label, Background, Border } from "wuira/ui";
 import type { CustomizationPage, CustomizationContext, EditMode } from "./core/contract";
 import { darkTheme } from "./theme/dark";
+import { ControlContent, Glyph } from "./theme/ControlContent";
 
 interface Actions { SetMode(mode: EditMode): void; Reset(): void; }
 
@@ -9,6 +10,7 @@ interface Actions { SetMode(mode: EditMode): void; Reset(): void; }
 export class CustomizationWindow {
     private readonly pages = new Map<string, CustomizationPage>();
     private selected = "dashboard";
+    private returnPage = "dashboard";
     private window?: Window;
     private pageMount?: { host: wuiraNativeFrame; content?: wuiraNativeFrame; refresh(): void };
 
@@ -32,6 +34,7 @@ export class CustomizationWindow {
                 console.log("LumaUI: enable the addon that provides the " + id + " page.");
                 return;
             }
+            if (this.pages.get(id)?.workspace && !this.pages.get(this.selected)?.workspace) this.returnPage = this.selected;
             this.selected = id;
         }
         if (this.window === undefined) this.window = new Window({
@@ -58,7 +61,7 @@ export class CustomizationWindow {
         const selected = this.selected === id;
         return <Button height={40} onClick={() => this.Navigate(id)}
             decorations={{ background: new Background({ color: selected ? darkTheme.colors.border : darkTheme.colors.surface }) }}>
-            <Label text={title} fontSize={13} margin={{ left: 10 }} color={selected ? darkTheme.colors.accent : darkTheme.colors.text} />
+            <ControlContent text={title} icon={id === "dashboard" ? "settings" : id === "library" ? "component" : id === "builtin-presets" ? "import" : id === "click-cast" ? "button" : "design"} width={184} height={40} size={12} color={selected ? darkTheme.colors.accent : darkTheme.colors.text} />
         </Button>;
     }
 
@@ -69,11 +72,11 @@ export class CustomizationWindow {
             <FlowLayout height={36} direction="horizontal" gap={12}>
                 <Button width={180} onClick={() => this.actions.SetMode("unlock")}
                     decorations={{ background: new Background({ color: darkTheme.colors.border }) }}>
-                    <Label text="Unlock layout" align="CENTER" fontSize={12} />
+                    <ControlContent text="Unlock layout" icon="layout" width={180} height={36} size={12} />
                 </Button>
                 <Button width={180} onClick={() => this.actions.SetMode("keys")}
                     decorations={{ background: new Background({ color: darkTheme.colors.border }) }}>
-                    <Label text="Keybind mode" align="CENTER" fontSize={12} />
+                    <ControlContent text="Keybind mode" icon="button" width={180} height={36} size={12} />
                 </Button>
             </FlowLayout>
             <Label height={28} text="YOUR MODULES" fontSize={11} color={darkTheme.colors.accent} />
@@ -96,26 +99,29 @@ export class CustomizationWindow {
         const width = window.Frame.GetWidth();
         const height = window.Frame.GetHeight();
         const bodyHeight = height - 132;
-        const context = { width: width - 288, height: bodyHeight - 32 };
+        const workspace = this.pages.get(this.selected)?.workspace === true;
+        const context = { width: width - (workspace ? 64 : 288), height: bodyHeight - 32 };
 
         return <FlowLayout width="inherit" height="inherit" padding={16} gap={12} clickThrough={false}
             decorations={{ background: new Background({ color: darkTheme.colors.background }),
                 border: new Border({ thickness: 1, color: darkTheme.colors.border }) }}>
             <FlowLayout height={48} direction="horizontal" gap={12} onMount={frame => window.BindDragHandle(frame)}>
-                <Label width={width - 80} text="LumaUI" fontSize={24} color={darkTheme.colors.accent} />
+                {workspace ? <Button width={96} height={32} margin={{ top: 8 }} onClick={() => this.Open(this.pages.has(this.returnPage) ? this.returnPage : "dashboard")}
+                    decorations={{ background: new Background({ color: darkTheme.colors.surface }) }}><ControlContent text="Back" icon="back" width={96} height={32} size={12} /></Button> : []}
+                <Label width={width - (workspace ? 188 : 80)} text={workspace ? "LumaUI / Editor" : "LumaUI"} fontSize={24} color={darkTheme.colors.accent} />
                 <Button width={36} height={32} margin={{ top: 8 }} onClick={() => this.Close()}
                     decorations={{ background: new Background({ color: darkTheme.colors.surface }) }}>
-                    <Label text="X" align="CENTER" fontSize={14} />
+                    <Cell width={36} height={32} padding={{ left: 10, top: 8 }}><Glyph icon="close" size={16} /></Cell>
                 </Button>
             </FlowLayout>
             <FlowLayout height={bodyHeight} direction="horizontal" gap={16}>
-                <FlowLayout width={208} padding={12} gap={8}
+                {workspace ? [] : <FlowLayout width={208} padding={12} gap={8}
                     decorations={{ background: new Background({ color: darkTheme.colors.surface }) }}>
                     <Label height={24} text="CUSTOMIZE" fontSize={10} color={darkTheme.colors.muted} />
                     {this.Nav({ id: "dashboard", title: "Dashboard" })}
                     {Array.from(this.pages.values()).map(page => this.Nav({ id: page.id, title: page.title }))}
-                </FlowLayout>
-                <Cell width={width - 256} padding={16} onMount={host => {
+                </FlowLayout>}
+                <Cell width={width - (workspace ? 32 : 256)} padding={16} onMount={host => {
                     host.SetClipsChildren(true);
                     const state: NonNullable<CustomizationWindow["pageMount"]> = { host, refresh: () => {
                         try {

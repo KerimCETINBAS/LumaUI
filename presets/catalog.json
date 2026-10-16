@@ -1,0 +1,22 @@
+{
+  "PlayerResources": {
+    "file": "player.luma.txt",
+    "name": "Player resources",
+    "kind": "preset"
+  },
+  "PaladinParty": {
+    "file": "paladin-party.luma.txt",
+    "name": "Paladin healer · Party",
+    "kind": "preset"
+  },
+  "PaladinRaid": {
+    "file": "paladin-raid.luma.txt",
+    "name": "Paladin healer · Raid",
+    "kind": "preset"
+  },
+  "BlizzardPresentation": {
+    "file": "blizzard.luma.txt",
+    "name": "Blizzard presentation",
+    "kind": "skin"
+  }
+}
