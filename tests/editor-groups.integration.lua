@@ -11,7 +11,7 @@ assert(draft.nodes[1].kind=='foreach' and #draft:Tree()>20 and draft.documentNam
 for _,entry in ipairs(draft:Tree()) do draft:Select(entry.node.id);draft.propertyEditor:Ensure() end
 assert(draft.propertyEditor.nodeId==draft.selected,'all repeated-template props remain selectable')
 draft:New()
-assert(draft.nodes[1].kind=='fragment' and #draft.sources==0,'New has no special component category')
+assert(draft.nodes[1].kind=='cell' and #draft.sources==0,'New has no special component category')
 draft:Add('foreach');local listId=draft.selected;local member=draft:Children(listId)[1].id
 assert(draft.sources[1].type=='list' and #draft.sources[1].props.items==0,'Repeat starts with an empty generic list')
 local form=draft.sourceEditor
@@ -20,7 +20,7 @@ draft:BindSource('members','source')
 draft:UpdateSources({draft.sources[2]})
 draft.Selected.props.wrapAfter=5
 local document=draft:Document()
-assert(document.root.type=='fragment' and document.root.children[1].source=='members' and #document.root.children[1].children==1 and #draft:Tree()==3)
+assert(document.root.type=='cell' and document.root.children[1].source=='members' and #document.root.children[1].children==1 and #draft:Tree()==3)
 assert(document.sources[1].type=='groupMembers' and document.sources[1].props.scope=='party' and document.class==nil and document.condition==nil,'roster is explicitly bound with a source factory')
 draft:Select(member);draft:Remove();assert(#draft:Tree()==3,'last required template cannot be removed')
 draft:Add('action');local button=draft.selected
@@ -48,7 +48,7 @@ local preview=LumaUI.Presets:Preview(draft:Document())
 preview.Frame=master.require('lua_modules.wuira.lib.index').wuira:Mount(preview.View)
 assert(preview.Nodes:get(member) and preview.Nodes:get(name) and preview.Nodes:get(bar),'blank-authored members render in the preview')
 assert(preview.Nodes:get(bar).value==75 and preview.Nodes:get(button).kind=='Frame','preview binds sample health and keeps secure actions disabled')
-assert(preview.Frame.height==5*72+4*4,'preview repeats the one member template for five samples')
+assert(preview.Nodes:get(listId).height==5*72+4*4,'the repeated list renders five samples inside the explicit Cell root')
 preview:Dispose();assert(preview.Nodes.size==0)
 local imported=LumaUI.Presets:Import(LumaUI.Presets:Export(draft:Document()))
 draft:Load(imported);assert(draft:Document().root.children[1].children[1].children[1].children[1].children[3].source=='member.health','authoring tree and bindings survive sharing')
