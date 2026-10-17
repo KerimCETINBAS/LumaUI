@@ -224,4 +224,25 @@ do
  name='Target C';health=300;emit('PLAYER_TARGET_CHANGED');assert(observed==200,'unmounted target subscriptions stop')
  UnitName,UnitHealth,UnitHealthMax=savedName,savedHealth,savedMax
 end
+-- Headless groups are an optional root, and removing one preserves the child.
+local rootDraft=new(editor.require('Draft').EditorDraft);rootDraft:New()
+assert(rootDraft:Document().root.type=='cell','new cells do not require a headless wrapper')
+rootDraft:SetRootKind('fragment');rootDraft:Add('cell')
+local childID=rootDraft.selected;rootDraft:Add('label');local labelID=rootDraft.selected
+rootDraft:Select('root');rootDraft:Remove()
+assert(rootDraft.nodes[1].id==childID and rootDraft:Document().root.children[1].id==labelID,'removing the wrapper promotes its intact content')
+rootDraft:Undo();assert(rootDraft.nodes[1].kind=='fragment','wrapper removal supports Undo')
+rootDraft:Redo();assert(rootDraft.nodes[1].id==childID)
+rootDraft.nodes[1].props.direction='horizontal';rootDraft:SetRootKind('flow');assert(rootDraft.nodes[1].props.direction=='horizontal','root conversion preserves compatible layout properties')
+-- Element labels survive exports and history without changing technical IDs.
+local beforeID=labelID
+assert(rootDraft:RenameNode(labelID,'Damage label'))
+assert(rootDraft:Document().root.children[1].name=='Damage label' and rootDraft:Document().root.children[1].id==beforeID)
+rootDraft:Undo();assert(rootDraft:Document().root.children[1].name==nil)
+rootDraft:Redo();assert(rootDraft:Document().root.children[1].name=='Damage label')
+local roundtrip=LumaUI.Presets:Import(LumaUI.Presets:Export(rootDraft:Document()))
+local loaded=new(editor.require('Draft').EditorDraft);loaded:Load(roundtrip)
+assert(loaded:Document().root.children[1].name=='Damage label')
+assert(not loaded:RenameNode(labelID,'  '),'empty element names are rejected')
+assert(loaded.documentName==roundtrip.name,'element rename does not rename the component')
 print('Editor safety: shared preview, zoom, import, panels, undo/redo and combat retention passed')

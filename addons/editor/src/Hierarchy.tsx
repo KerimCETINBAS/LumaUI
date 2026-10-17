@@ -6,6 +6,7 @@ import { describeNode } from "./NodePresentation";
 import { SingleLine } from "./SingleLine";
 import { Glyph, elementIcon } from "./Glyph";
 import { IconButton } from "./IconButton";
+type RenameRow = wuiraNativeFrame & { SetScript(script: "OnDoubleClick", handler: ((this: void, frame: wuiraNativeFrame, mouse?: string) => void) | undefined): void };
 type Placement = "before" | "inside" | "after";
 interface DropZone { id: string; position: Placement; frame: wuiraNativeFrame; mark: wuiraNativeTexture; }
 /** Stable-width rows keep nesting clear without squeezing text into narrow boxes. */
@@ -32,6 +33,7 @@ export function Hierarchy({ draft, width, height }: { draft: EditorDraft; width:
                 tooltip: new Tooltip({ text: presentation.title, lines: [{ text: presentation.detail }, { text: "ID: " + item.node.id }, ...(item.node.source === undefined ? [] : [{ text: "Source: " + item.node.source }])] }) }}
             onMount={frame => {
                 frame.SetClipsChildren(true); frame.RegisterForDrag("LeftButton");
+                (frame as RenameRow).SetScript("OnDoubleClick", (_frame,mouse) => { if (mouse === undefined || mouse === "LeftButton") draft.StartNodeRename(item.node.id,presentation.title); });
                 frame.SetScript("OnDragStart", () => { if (item.node.id !== draft.nodes[0].id) { dragging = item.node.id; status?.SetText("Drag rows to move or nest"); } });
                 frame.SetScript("OnDragStop", () => { inspect(); const target = hover, id = dragging; stop(); if (target !== undefined && id !== undefined) draft.MoveNode(id, target.id, target.position); });
                 const own: DropZone[] = [];
@@ -43,7 +45,7 @@ export function Hierarchy({ draft, width, height }: { draft: EditorDraft; width:
                     const placement = position === "inside" && !draft.CanContain(item.node) ? "after" : position;
                     const target: DropZone = { id: item.node.id, position: placement, frame: zone, mark }; zones.push(target); own.push(target);
                 }
-                return () => { frame.RegisterForDrag(); frame.SetScript("OnDragStart", undefined); frame.SetScript("OnDragStop", undefined); for (const target of own) { target.frame.Hide(); const i = zones.indexOf(target); if (i >= 0) zones.splice(i, 1); } };
+                return () => { (frame as RenameRow).SetScript("OnDoubleClick",undefined); frame.RegisterForDrag(); frame.SetScript("OnDragStart", undefined); frame.SetScript("OnDragStop", undefined); for (const target of own) { target.frame.Hide(); const i = zones.indexOf(target); if (i >= 0) zones.splice(i, 1); } };
             }}>
             <FlowLayout width={rowWidth} height={34} direction="horizontal" gap={4} padding={{ left: 4 }}>
                 <Cell width={indent} />

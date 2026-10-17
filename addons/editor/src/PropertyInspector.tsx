@@ -13,7 +13,7 @@ import { SingleLine } from "./SingleLine";
 import { ClickCastBindingField } from "./ClickCastBindingField";
 import { IconButton } from "./IconButton";
 import { Dropdown } from "./Dropdown";
-import { Action, Heading, Note, Field, Toggle, ColorFields, Input, ScrollForm, colors, friendly } from "./InspectorControls";
+import { InspectorSections, Action, Heading, Note, Field, Toggle, ColorFields, Input, ScrollForm, colors, friendly } from "./InspectorControls";
 
 export function PropertyInspector({ draft, width, height }: { draft: EditorDraft; width: number; height: number }) {
     const state = draft.propertyEditor; state.Ensure();
@@ -44,12 +44,12 @@ export function PropertyInspector({ draft, width, height }: { draft: EditorDraft
         <Note width={width} text="This element does not occupy layout space. Native effects are disabled in the preview and restored when its owning component is disabled." />
         {draft.Selected.kind === "hideUnitFrame" ? <Field state={state} name="unit" title="Native frame" rule={rules.unit} width={width} /> : <Note width={width} text={"Add effects or reusable component references to this group."} />}
         <Action width={width} text="Update preview" onClick={() => state.Save()} />
-        <Action width={width} text="Delete element" onClick={() => draft.Remove()} />
+        <Action width={width} text={draft.Selected.kind === "fragment" && draft.Selected.id === draft.nodes[0].id ? "Remove group" : "Delete element"} onClick={() => draft.Remove()} />
     </FlowLayout>;
     if (draft.Selected.kind === "preset") return <ComponentReferenceInspector draft={draft} width={width} height={height} />;
     const tabs = ["Display", "Layout", ...(draft.Selected.kind === "preset" ? [] : ["Data"]), ...(draft.Selected.kind === "action" ? ["Actions"] : [])];
     if (!tabs.includes(state.panel)) state.panel = "Display";
-    const w = width - 8; const half = (w - 8) / 2;
+    const w = width - 36; const half = (w - 8) / 2;
     const rows: View[] = [];
     const used = new Set<string>();
     const heading = (text: string) => rows.push(<Heading text={text} width={w} />);
@@ -178,7 +178,7 @@ export function PropertyInspector({ draft, width, height }: { draft: EditorDraft
         <FlowLayout height={28} direction="horizontal" gap={4}>
             {tabs.map(tab => <IconButton width={(width - (tabs.length - 1)*4)/tabs.length} text={tab} icon={tab === "Display" ? "visuals" : tab === "Layout" ? "layout" : tab === "Data" ? "sources" : "button"} active={tab === state.panel} quiet onClick={() => state.Section(tab)} />)}
         </FlowLayout>
-        <ScrollForm width={width} height={height - 98} rows={rows} offset={state.scroll[state.panel] ?? 0} remember={offset => { state.scroll[state.panel] = offset; }} />
+        <ScrollForm width={width} height={height - 98} rows={InspectorSections(rows,width-16)} gap={12} offset={state.scroll[state.panel] ?? 0} remember={offset => { state.scroll[state.panel] = offset; }} />
         <FlowLayout height={28} direction="horizontal" gap={6}>
             <Action width={width - 118} text="Update preview" onClick={() => state.Save()} />
             <Action width={112} text="Delete element" onClick={() => draft.Remove()} />

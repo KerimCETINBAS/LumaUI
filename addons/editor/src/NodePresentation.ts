@@ -38,5 +38,6 @@ export function describeNode(draft: EditorDraft, node: EditorNode): NodePresenta
     }
     const rawName = (node.kind === "action" ? "secureButton" : node.kind) + " " + node.id;
     if (node !== draft.nodes[0] && node.name !== rawName && node.name !== elementLabel(node.kind) && node.name !== "Spell icon") title = node.name;
+    if (node.label !== undefined) title = node.label;
     return { title, detail: type + (count > 0 ? " · " + count + (count === 1 ? " child" : " children") : ""), tag: tags[node.kind] ?? "U", texture };
 }

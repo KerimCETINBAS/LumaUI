@@ -7,7 +7,7 @@ export type Properties = Record<string, DataValue>;
 export interface SourceSpec { isProp?: boolean; optional?: boolean; name: string; type: string; props: Properties; }
 export interface PropertySourceBinding { source: string; path?: string; }
 export interface ComponentActivationOverride { enabled?: ActivationMode; class?: CollectionClass | ""; condition?: CollectionCondition | ""; layout?: string; }
-export interface PresetNode { activation?: ComponentActivationOverride; sourceProps?: Record<string, string>; bindings?: Record<string, PropertySourceBinding>; id: string; type: string; props: Properties; source?: string; sourcePath?: string; visibleSource?: string; textSource?: string; alphaSource?: string; children?: PresetNode[]; preset?: string; items?: string; }
+export interface PresetNode { name?: string; activation?: ComponentActivationOverride; sourceProps?: Record<string, string>; bindings?: Record<string, PropertySourceBinding>; id: string; type: string; props: Properties; source?: string; sourcePath?: string; visibleSource?: string; textSource?: string; alphaSource?: string; children?: PresetNode[]; preset?: string; items?: string; }
 export type ClickCastAction =
     | { readonly spellId: number; readonly itemId?: never; readonly macro?: never }
     | { readonly itemId: number; readonly spellId?: never; readonly macro?: never }

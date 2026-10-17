@@ -3,10 +3,10 @@ import type { Cell } from "wuira";
 import type { EditorDraft } from "./Draft";
 import { Core } from "./core";
 import { Dropdown } from "./Dropdown";
-import { Action, Field, Heading, Note, ScrollForm } from "./InspectorControls";
+import { InspectorSections, Action, Field, Heading, Note, ScrollForm } from "./InspectorControls";
 export function ComponentReferenceInspector({ draft, width, height }: { draft: EditorDraft; width: number; height: number }) {
     const node = draft.Selected, document = draft.dependencies.find(doc => doc.id === node.preset) ?? Core.Presets.Get(node.preset!);
-    const state = draft.propertyEditor, w = width - 12;
+    const state = draft.propertyEditor, w = width - 36;
     const rows: Cell[] = [<Heading width={w} text="Component instance" />,
         <Dropdown width={w} text={document?.name ?? "Missing component: " + node.preset}
             options={Core.Presets.List().filter(doc => doc.id !== draft.documentId).map(doc => ({label:doc.name,value:doc.id}))} onSelect={id => draft.ReplacePreset(id)} />,
@@ -37,5 +37,5 @@ export function ComponentReferenceInspector({ draft, width, height }: { draft: E
         rows.push(<Action width={w} text="Update layout" onClick={()=>state.Save()} />);
     }
     rows.push(<Action width={w} text="Delete reference" onClick={()=>draft.Remove()} />);
-    return <ScrollForm width={width} height={height} rows={rows} offset={state.scroll.reference ?? 0} remember={value=>{state.scroll.reference=value;}} />;
+    return <ScrollForm width={width} height={height} rows={InspectorSections(rows,width-16)} gap={12} offset={state.scroll.reference ?? 0} remember={value=>{state.scroll.reference=value;}} />;
 }

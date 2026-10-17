@@ -94,12 +94,12 @@ end
 assert(shown('klass') and shown('color') and shown('Case converter') and shown('Input equals'),'source cards expose all source fields without switching a selector')
 assert(not shown('color v'),'the source selector is removed')
 local scroll
-local separators=0
+local cards=0
 for i=#nativeFrames,1,-1 do local f=nativeFrames[i];if f:IsVisible() then
  if f.kind=='ScrollFrame' and f:GetVerticalScrollRange()>0 then scroll=f end
- if f.height==1 and f.width==408 then separators=separators+1 end
+ if f.width==408 and f.height>28 and #f.textures>=5 then cards=cards+1 end
 end end
-assert(separators>=2 and scroll,'source cards are separated and form one scrollable page')
+assert(cards>=2 and scroll,'sources have independent bordered background cards in one scrollable page')
 scroll.scripts.OnMouseWheel(scroll,-1);assert(state.scroll>0,'wheel scrolling reveals the remaining source fields')
 ui:Unmount(sourcesView)
 local classForm=state:For('klass')

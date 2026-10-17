@@ -51,9 +51,10 @@ export function Action({ text, onClick, width }: { text: string; onClick(): void
     return <IconButton width={width} text={text} icon={actionIcon(text)} onClick={onClick} />;
 }
 export function Heading({ text, width }: { text: string; width: number }) {
-    return <Label width={width} height={28} text={text} fontSize={12} color={colors.accent} margin={{ top: 6 }} />;
+    const view = <Label width={width} height={28} text={text} fontSize={12} color={colors.accent} />;
+    (view.props as Record<string, unknown>).inspectorSection = true; return view;
 }
-export function Note({ text, width }: { text: string; width: number }) { return <Label width={width} height={28} text={text} fontSize={10} color={colors.muted} />; }
+export function Note({ text, width }: { text: string; width: number }) { return <Label width={width} height={Math.max(28, Math.ceil(text.length / Math.max(1, Math.floor(width / 5.5))) * 14)} text={text} fontSize={10} color={colors.muted} />; }
 export interface FormState {
     values: Record<string, string>;
     Flush(): void;
@@ -131,4 +132,15 @@ export function ScrollForm({ width, height, rows, offset, remember, onViewport, 
         } catch (failure) { viewport.Dispose(); thumb.Hide(); if (content !== undefined) wuira.Unmount(content); throw failure; }
         return () => { cleanup?.(); if (content !== undefined) wuira.Unmount(content); viewport.Dispose(); thumb.Hide(); };
     }} />;
+}
+
+/** Group section headings and their fields into bounded cards. */
+export function InspectorSections(rows: View[], width: number): View[] {
+    const sections: View[][] = [];
+    for (const row of rows) {
+        if (sections.length === 0 || (row.props as Record<string,unknown>).inspectorSection === true) sections.push([]);
+        sections[sections.length-1].push(row);
+    }
+    return sections.map(children => <FlowLayout width={width} height={0} sizing="content" padding={10} gap={8}
+        decorations={{background:new Background({color:colors.background}),border:new Border({thickness:1,color:colors.border})}}>{children}</FlowLayout>);
 }

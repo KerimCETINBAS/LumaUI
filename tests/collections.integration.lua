@@ -320,7 +320,7 @@ assert(LumaUI.Presets:SourceProperties('mana').regenTimer.type=='boolean','inspe
 draft:Apply();tick()
 assert(LumaUI.Presets:Get('component-1').root.children[1].sourcePath=='channels.regen','Apply persists source paths')
 -- Create a headless component from UI Library, then reuse it in an existing Cell.
-LumaUI:OpenCustomization('library');click('New');tick()
+LumaUI:OpenCustomization('library');click('New');tick();draft:SetRootKind('fragment');tick()
 assert(draft.documentId=='component-2' and draft.nodes[1].kind=='fragment' and lastPreview.View==nil,'headless drafts have no fake frame')
 click('Effects');tick();click('Hide frame');tick()
 assert(draft.Selected.kind=='hideUnitFrame' and draft.Selected.props.unit=='player' and lastPreview.View==nil,'headless effect is editable and preview remains empty')

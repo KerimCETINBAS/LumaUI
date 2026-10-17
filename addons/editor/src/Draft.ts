@@ -8,6 +8,7 @@ import { elementDefaults, elementLabel } from "./ElementCatalog";
 
 export type NodeKind = string;
 export interface EditorNode {
+    label?: string;
     activation?: PresetNode["activation"];
     sourceProps?: PresetNode["sourceProps"];
     bindings?: PresetNode["bindings"];
@@ -60,6 +61,27 @@ export class EditorDraft {
     public renaming = false;
     public renameValue = "";
     private renameInput?: () => string;
+    public nodeRenameID?: string;
+    public nodeRenameValue = "";
+    private nodeRenameInput?: () => string;
+    public StartNodeRename(id: string, title: string): void {
+        this.propertyEditor.Flush(); this.sourceEditor.Flush(); this.selected = id;
+        this.nodeRenameID = id; this.nodeRenameValue = title; Core.RefreshCustomization();
+    }
+    public CaptureNodeRename(read: () => string): () => void {
+        this.nodeRenameInput = read; return () => { if (this.nodeRenameInput === read) { this.nodeRenameValue = read(); this.nodeRenameInput = undefined; } };
+    }
+    public CancelNodeRename(): void { this.nodeRenameID = undefined; this.nodeRenameInput = undefined; Core.RefreshCustomization(); }
+    public FinishNodeRename(value = this.nodeRenameInput?.() ?? this.nodeRenameValue): boolean {
+        const id = this.nodeRenameID; if (id === undefined) return true;
+        return this.RenameNode(id,value);
+    }
+    public RenameNode(id: string, value: string): boolean {
+        const label = value.trim(), node = this.nodes.find(item => item.id === id);
+        if (node === undefined || label.length === 0 || label.length > 96) { this.Report("Use an element name between 1 and 96 characters."); return false; }
+        node.label = label; this.nodeRenameID = undefined; this.nodeRenameInput = undefined;
+        this.Changed("Element renamed. Save to update the component."); return true;
+    }
     public componentFilter = "";
     public StartRename(): void { this.propertyEditor.Flush(); this.sourceEditor.Flush(); this.renameValue = this.documentName; this.renaming = true; Core.RefreshCustomization(); }
     public CancelRename(): void { this.renaming = false; this.renameInput = undefined; Core.RefreshCustomization(); }
@@ -89,11 +111,11 @@ export class EditorDraft {
             collectionClass: this.collectionClass, collectionCondition: this.collectionCondition, nativeLayout: this.nativeLayout,
             layoutPositions: this.layoutPositions, selected: this.selected });
     }
-    public get HasUnsavedChanges(): boolean { return this.dirty || this.propertyEditor.HasChanges || this.sourceEditor.HasChanges || this.renaming && (this.renameInput?.() ?? this.renameValue).trim() !== this.documentName; }
+    public get HasUnsavedChanges(): boolean { return this.nodeRenameID !== undefined || this.dirty || this.propertyEditor.HasChanges || this.sourceEditor.HasChanges || this.renaming && (this.renameInput?.() ?? this.renameValue).trim() !== this.documentName; }
     private get PendingRename(): boolean { return this.renaming && (this.renameInput?.() ?? this.renameValue).trim() !== this.documentName; }
     public get CanUndo(): boolean { return this.history.CanUndo || this.propertyEditor.HasChanges || this.sourceEditor.HasChanges || this.PendingRename; }
     public get CanRedo(): boolean { return this.history.CanRedo && !this.propertyEditor.HasChanges && !this.sourceEditor.HasChanges && !this.PendingRename; }
-    public Suspend(): void { this.propertyEditor.Flush(); this.sourceEditor.Flush(); if (this.renaming && this.renameInput !== undefined) this.renameValue = this.renameInput(); }
+    public Suspend(): void { if (this.nodeRenameInput !== undefined) this.nodeRenameValue = this.nodeRenameInput(); this.propertyEditor.Flush(); this.sourceEditor.Flush(); if (this.renaming && this.renameInput !== undefined) this.renameValue = this.renameInput(); }
     private StageEdits(): boolean {
         if (this.renaming && !this.Rename()) return false;
         if (this.sourceEditor.HasChanges && !this.sourceEditor.SaveAll()) return false;
@@ -103,7 +125,7 @@ export class EditorDraft {
     private RestoreSnapshot(snapshot: DraftSnapshot): void {
         const source = this.sourceEditor.original;
         Object.assign(this, cloneData(snapshot));
-        this.renaming = false; this.renameInput = undefined; this.propertyEditor.Open(); this.sourceEditor.Reset();
+        this.nodeRenameID = undefined; this.nodeRenameInput = undefined; this.renaming = false; this.renameInput = undefined; this.propertyEditor.Open(); this.sourceEditor.Reset();
         if (this.inspector === "sources") this.sourceEditor.Open(this.sources.find(item => item.name === source)?.name ?? this.sources[0]?.name);
         this.Reveal(this.selected); this.ScrollToSelection();
         this.dirty = this.savedState === undefined || !sameDraft(this.Snapshot(), this.savedState);
@@ -385,9 +407,34 @@ export class EditorDraft {
         this.Changed("Element added.");
     }
 
+    public SetRootKind(kind: string): void {
+        if (!["cell", "flow", "grid", "fragment"].includes(kind)) return;
+        this.propertyEditor.Flush(); this.sourceEditor.Flush();
+        const previous = this.nodes, node = this.nodes[0];
+        const rules = kind === "fragment" ? {} : Core.Presets.ComponentProperties(kind);
+        const defaults = elementDefaults(kind, "player"), props: Properties = {};
+        for (const [key,value] of Object.entries(node.props ?? {})) if (rules[key] !== undefined) props[key] = value;
+        const width = node.width > 0 ? node.width : 320, height = node.height > 0 ? node.height : 180;
+        if (kind !== "fragment") Object.assign(props, { ...defaults.props, ...props }, {width,height});
+        this.nodes = [{ ...node, kind, name: elementLabel(kind), props, width: kind === "fragment" ? 0 : width, height: kind === "fragment" ? 0 : height,
+            source: undefined, sourcePath: undefined, visibleSource: undefined, textSource: undefined, alphaSource: undefined, bindings: undefined, preset: undefined, sourceProps: undefined, activation: undefined, items: undefined }, ...this.nodes.slice(1)];
+        try { this.Document(); } catch (failure) { this.nodes = previous; this.Report(String(failure)); return; }
+        this.selected = node.id; this.propertyEditor.nodeId = ""; this.Changed("Root element updated. Headless groups are optional.");
+    }
     public Remove(): void {
         const node = this.Selected;
-        if (node === this.nodes[0]) { this.message = "The root layout stays in the draft."; Core.RefreshCustomization(); return; }
+        if (node === this.nodes[0]) {
+            if (node.kind !== "fragment") { this.Report("Choose another root element type to replace the root."); return; }
+            const children = this.Children(node.id);
+            if (children.length !== 1) { this.SetRootKind(children.length === 0 ? "cell" : "flow"); return; }
+            const previous = this.nodes, child = children[0];
+            const candidate = cloneData(this.nodes.filter(item => item.id !== node.id));
+            const promoted = candidate.find(item => item.id === child.id)!; promoted.parent = "";
+            for (const item of candidate) if (item.props?.relativeTo === node.id) { if (item.id === promoted.id) delete item.props.relativeTo; else item.props.relativeTo = promoted.id; }
+            this.nodes = [promoted, ...candidate.filter(item => item.id !== promoted.id)];
+            try { this.Document(); } catch (failure) { this.nodes = previous; this.Report(String(failure)); return; }
+            this.selected = promoted.id; this.propertyEditor.nodeId = ""; this.Changed("Headless group removed; its content is preserved."); return;
+        }
         const parent = this.nodes.find(item => item.id === node.parent);
         if ((parent?.kind === "foreach" || parent?.kind === "blizzardElement" && parent.props?.replace === true) && this.Children(parent.id).length === 1) {
             this.Report("Keep one item template in the repeated list. Edit its contents or delete the list instead."); return;
@@ -471,8 +518,8 @@ export class EditorDraft {
         const identity = Core.Presets.Identity("Component " + index); this.documentId = identity.id; this.documentName = identity.name; this.owner = undefined;
         this.activationMode = "condMet"; this.collectionClass = ""; this.collectionCondition = ""; this.nativeLayout = ""; this.layoutPositions = undefined;
         this.inspector = "properties"; this.propertyEditor.nodeId = "";
-        this.nodes = [{ ...rootNode(), kind: "fragment", name: "Component", width: 0, height: 0, props: {} }]; this.sources = []; this.dependencies = []; this.nextId = 1; this.selected = "root"; this.treeScroll = 0;
-        this.identityPrompt = undefined; this.ResetTree(); this.sourceEditor.Reset(); this.renaming = false; this.renameInput = undefined;
+        this.nodes = [{ ...rootNode(), kind: "cell", name: "Cell", props: { width: 320, height: 180 } }]; this.sources = []; this.dependencies = []; this.nextId = 1; this.selected = "root"; this.treeScroll = 0;
+        this.nodeRenameID = undefined; this.nodeRenameInput = undefined; this.identityPrompt = undefined; this.ResetTree(); this.sourceEditor.Reset(); this.renaming = false; this.renameInput = undefined;
         this.history.Reset(this.Snapshot()); this.savedState = undefined;
         this.Changed("New component draft. Add elements and sources, then Save to mount it.");
     }
@@ -487,7 +534,7 @@ export class EditorDraft {
             if (node.id === this.nodes[0].id && !["fragment", "preset", "hideUnitFrame", "hideActionBars"].includes(kind) && props.mode === undefined) {
                 props.mode = "absolute"; props.anchor = "CENTER"; props.relativeAnchor = "CENTER"; props.x = 0; props.y = 0;
             }
-            return { id: node.id, type: kind, props, ...(node.activation === undefined ? {} : { activation: node.activation }), ...(node.sourceProps === undefined ? {} : { sourceProps: node.sourceProps }), ...(node.bindings === undefined ? {} : { bindings: node.bindings }), ...(node.preset === undefined ? {} : { preset: node.preset }), ...(node.source === undefined ? {} : { source: node.source }),
+            return { id: node.id, type: kind, props, ...(node.label === undefined ? {} : { name: node.label }), ...(node.activation === undefined ? {} : { activation: node.activation }), ...(node.sourceProps === undefined ? {} : { sourceProps: node.sourceProps }), ...(node.bindings === undefined ? {} : { bindings: node.bindings }), ...(node.preset === undefined ? {} : { preset: node.preset }), ...(node.source === undefined ? {} : { source: node.source }),
                 ...(node.items === undefined ? {} : { items: node.items }),
                 ...(node.sourcePath === undefined ? {} : { sourcePath: node.sourcePath }),
                 ...(node.visibleSource === undefined ? {} : { visibleSource: node.visibleSource }),
@@ -523,7 +570,7 @@ export class EditorDraft {
         const document = Core.Presets.Validate(input, true);
         const nodes: EditorNode[] = [];
         const visit = (node: PresetNode, parent: string) => {
-            nodes.push({ id: node.id, parent, kind: node.type === "secureButton" ? "action" : node.type, name: node.type + " " + node.id,
+            nodes.push({ id: node.id, parent, label: node.name, kind: node.type === "secureButton" ? "action" : node.type, name: node.type + " " + node.id,
                 activation: node.activation, sourceProps: node.sourceProps, width: typeof node.props.width === "number" ? node.props.width : 140,
                 height: typeof node.props.height === "number" ? node.props.height : 32,
                 direction: node.props.direction === "horizontal" ? "horizontal" : "vertical", props: node.props, bindings: node.bindings, source: node.source, items: node.items, sourcePath: node.sourcePath, visibleSource: node.visibleSource, textSource: node.textSource, alphaSource: node.alphaSource, preset: node.preset });
@@ -587,6 +634,7 @@ export class EditorDraft {
         this.Changed("Component activation updated. Save to update it in the game.");
     }
     public Commit(): void {
+        if (!this.FinishNodeRename()) return;
         if (this.renaming && !this.Rename()) return;
         if (this.sourceEditor.HasChanges && !this.sourceEditor.SaveAll()) return;
         this.propertyEditor.Ensure();

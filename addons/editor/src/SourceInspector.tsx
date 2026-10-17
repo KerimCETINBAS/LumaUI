@@ -1,17 +1,17 @@
 import { CaseFields, OutputFields } from "./ConverterFields";
 import { UI } from "wuira";
 import type { Cell as View } from "wuira";
-import { FlowLayout, Label, Cell, Background } from "wuira/ui";
+import { FlowLayout, Label, Cell, Background, Border } from "wuira/ui";
 import type { EditorDraft } from "./Draft";
 import type { SourceEditor } from "./SourceEditor";
 import { Core } from "./core";
 import { Dropdown } from "./Dropdown";
 import { Action, Field, Toggle, Heading, Note, Input, ScrollForm, colors, friendly, sourceType } from "./InspectorControls";
 
-function SourceCard({ draft, state, width }: { draft: EditorDraft; state: SourceEditor; width: number }) {
+function SourceCard({ draft, state, width: outerWidth }: { draft: EditorDraft; state: SourceEditor; width: number }) {
+    const width = Math.max(80, outerWidth-20);
     const rules = Core.Presets.SourceProperties(state.type);
     const rows: View[] = [
-        <Cell width={width} height={1} decorations={{ background: new Background({ color: colors.border }) }} />,
         <Heading text={state.original ?? "New source"} width={width} />,
         <Label height={20} text={sourceType(state.type)} fontSize={11} color={colors.muted} />,
     ];
@@ -43,7 +43,8 @@ function SourceCard({ draft, state, width }: { draft: EditorDraft; state: Source
         <Action width={width - 82} text={state.original === undefined ? "Create source" : "Update source"} onClick={() => state.Save()} />
         <Action width={76} text="Delete" onClick={() => state.Delete()} />
     </FlowLayout>);
-    return <FlowLayout width={width} height={0} sizing="content" gap={8} padding={{ bottom: 16 }}>{rows}</FlowLayout>;
+    return <FlowLayout width={outerWidth} height={0} sizing="content" gap={8} padding={10}
+        decorations={{background:new Background({color:colors.background}),border:new Border({thickness:1,color:colors.border})}}>{rows}</FlowLayout>;
 }
 export function SourceInspector({ draft, width, height }: { draft: EditorDraft; width: number; height: number }) {
     const state = draft.sourceEditor, w = width - 12;
@@ -56,7 +57,7 @@ export function SourceInspector({ draft, width, height }: { draft: EditorDraft; 
             <Label width={width - 124} height={28} text="Component sources" fontSize={12} color={colors.accent} />
             <Action width={116} text="New source" onClick={() => state.BeginNew()} />
         </FlowLayout>
-        <ScrollForm width={width} height={height - 68} rows={rows} offset={state.scroll} remember={offset => { state.scroll = offset; }} gap={8} />
+        <ScrollForm width={width} height={height - 68} rows={rows} offset={state.scroll} remember={offset => { state.scroll = offset; }} gap={12} />
         <Action width={width} text="Update all sources" onClick={() => state.SaveAll()} />
     </FlowLayout>;
 }

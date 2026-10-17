@@ -164,8 +164,9 @@ export class Presets extends Library<PresetDocument> implements PresetAPI {
             const visit = (inputNode: unknown, level: number, insideGroup = false, insideDynamic = dynamic): number => {
                 if (level > 32 || ++nodeCount > 256) fail("component tree is too large");
                 const node = record(inputNode);
-                keys(node, ["id", "type", "props", "source", "sourcePath", "visibleSource", "textSource", "alphaSource", "children", "preset", "items", "bindings", "activation", "sourceProps"]);
+                keys(node, ["id", "name", "type", "props", "source", "sourcePath", "visibleSource", "textSource", "alphaSource", "children", "preset", "items", "bindings", "activation", "sourceProps"]);
                 if (typeNotPreset(node) && (node.activation !== undefined || node.sourceProps !== undefined)) fail("only component references accept activation and source inputs");
+                if (node.name !== undefined) text(node.name, "element name", 96);
                 const id = identifier(node.id); if (ids.has(id)) fail("duplicate node ID: " + id); ids.add(id);
                 const type = identifier(node.type);
                 if (insideGroup && type === "preset") fail("edit component references outside the repeated unit template");

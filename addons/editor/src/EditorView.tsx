@@ -1,3 +1,5 @@
+import { ElementNameField } from "./ElementNameField";
+import { Dropdown } from "./Dropdown";
 import { UI } from "wuira";
 import { FlowLayout, Cell, Background, Tooltip, Label, Button } from "wuira/ui";
 import type { CustomizationContext } from "lumaui/core";
@@ -56,7 +58,11 @@ export function EditorView({ draft, width, height }: CustomizationContext & { dr
     </FlowLayout>;
     const inspector = (w: number) => <FlowLayout width={w} height={workspaceHeight} gap={6} decorations={{ background: new Background({ color: colors.surface }) }}>
         <FlowLayout height={24} direction="horizontal" gap={6}>{expand("inspector")}<SingleLine width={w - 90} height={24} text="Properties" /></FlowLayout>
-        <PropertyInspector draft={draft} width={w} height={workspaceHeight - 30} />
+        <ElementNameField draft={draft} width={w} />
+        {draft.Selected.id === draft.nodes[0].id ? <Dropdown width={w} text={"Root: " + (draft.nodes[0].kind === "fragment" ? "Headless group" : draft.nodes[0].kind)}
+            options={[{label:"Cell",value:"cell"},{label:"Flow",value:"flow"},{label:"Grid",value:"grid"},{label:"Headless group",value:"fragment"}]}
+            onSelect={kind => draft.SetRootKind(kind)} /> : []}
+        <PropertyInspector draft={draft} width={w} height={Math.max(80, workspaceHeight - (draft.Selected.id === draft.nodes[0].id ? 64 : 30) - (draft.nodeRenameID === undefined ? 34 : 100))} />
     </FlowLayout>;
     return <FlowLayout width={width} height={height} gap={8}>
         <FlowLayout height={28} direction="horizontal" gap={8}>

@@ -55,7 +55,7 @@ local function doubleClick(text)
   local frame=nativeFrames[index]
   if frame.fontString and frame.fontString.text==text and frame:IsVisible() then
    while frame and frame~=UIParent do
-    if frame.scripts and frame.scripts.OnDoubleClick then frame.scripts.OnDoubleClick(frame,'LeftButton');return end
+    if frame.scripts and frame.scripts.OnDoubleClick and frame.height==28 then frame.scripts.OnDoubleClick(frame,'LeftButton');return end
     frame=frame.parent
    end
   end
@@ -138,11 +138,11 @@ click('Visual Editor');assert(input('207'),'returning to the editor retains unfi
 click('Save');tick();assert(find(LumaUI.Presets:Get(document.id).root,bar).props.width==207,'retained typed input can be saved after returning')
 click('Back');assert(visible('CUSTOMIZE') and visible('New'),'Back returns to the library and its create actions')
 source:Open('ux.mana');source.values.unit='target';source.inputs:clear()
-click('New');assert(draft.documentId=='component-1' and draft.nodes[1].kind=='fragment' and visible('LumaUI / Editor'),'library creates a fresh editor draft')
+click('New');assert(draft.documentId=='component-1' and draft.nodes[1].kind=='cell' and visible('LumaUI / Editor'),'library creates a fresh editor draft')
 assert(not LumaUI.Presets:Get('component-1'),'creating a draft does not install it')
 assert(not draft.sourceEditor.HasChanges and #draft.sources==0,'a new component cannot inherit an unfinished source form')
 assert(not visible('New party') and not visible('New raid') and not visible('New spell list') and not visible('New headless'),'only generic creation is exposed')
-click('Save');tick();assert(LumaUI.Presets:Get('component-1').root.type=='fragment' and LumaUI.Presets:IsHeadless(LumaUI.Presets:Get('component-1')),'an empty generic component is naturally headless')
+click('Save');tick();assert(LumaUI.Presets:Get('component-1').root.type=='cell' and not LumaUI.Presets:IsHeadless(LumaUI.Presets:Get('component-1')),'new components start as visual cells without a mandatory group')
 draft:Add('foreach');tick()
 assert(draft.sources[1].type=='list' and #draft.sources[1].props.items==0,'Repeat does not install a party source')
 draft.propertyEditor:Ensure();draft.propertyEditor.itemsExpression='KnownSpells("Seal*")';draft.propertyEditor.inputs:clear();click('Save');tick()

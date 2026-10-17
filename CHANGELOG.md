@@ -4,6 +4,17 @@ All notable changes to the LumaUI addon suite are recorded here. Core and Editor
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-17
+
+### Added
+
+- Bordered, padded cards for Properties sections and individual Sources, with clearer spacing and wrapped explanatory notes.
+- Hierarchy element names can be edited from a row double-click or the inspector, persist in component exports and support Undo without changing IDs or bindings.
+
+### Fixed
+
+- New editor components start with a Cell instead of a mandatory headless group. Root type is editable; removing a headless root preserves its children and supports Undo.
+
 ## [0.2.0] - 2026-10-17
 
 ### Fixed
