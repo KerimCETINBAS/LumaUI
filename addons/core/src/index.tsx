@@ -1,10 +1,13 @@
+import { ComponentPreview } from "./builder/ComponentPreview";
 import { LumaOptions } from "./Options";
+import { NativeFrameControls } from "./NativeFrameControls";
 import { installActionSlotCommands } from "./NativeActionSlots";
 import { PlayerActions } from "./helpers/PlayerActions";
 import { KnownSpells } from "./helpers/KnownSpells";
+import { UnitToBool } from "./helpers/UnitToBool";
 
 import { darkTheme } from "./theme/dark";
-import type { LumaCoreAPI, PresetDocument, PresetDraftKind } from "./core/contract";
+import type { LumaCoreAPI, PresetDocument } from "./core/contract";
 
 import { CollectionControls } from "./builder/CollectionControls";
 import { BuiltinPresets } from "./BuiltinPresets";
@@ -25,15 +28,16 @@ function initialize(): void {
     const skins = new Skins(options.store);
     registerBuiltins(presets, skins);
     let editor: ((document: PresetDocument) => void) | undefined;
-    let creator: ((kind: PresetDraftKind) => void) | undefined;
+    let creator: (() => void) | undefined;
     const builtinStrings = { ...BuiltinPresets };
     const core: LumaCoreAPI = {
-        Helpers: { KnownSpells, PlayerActions },
+        Preview: props => ComponentPreview(props, presets, darkTheme),
+        Helpers: { KnownSpells, PlayerActions, UnitToBool },
         BuiltinPresets: builtinStrings,
         RegisterBuiltinPreset: preset => builtinLibrary.Register(preset),
         RegisterPresetEditor: callback => { editor = callback; return () => { if (editor === callback) editor = undefined; }; },
         RegisterPresetCreator: callback => { creator = callback; return () => { if (creator === callback) creator = undefined; }; },
-        CreatePreset: kind => { if (InCombatLockdown()) { console.log("Create components after combat."); return; } if (creator === undefined) { console.log("Enable LumaUI.Editor to create components."); return; } creator(kind); options.OpenCustomization("editor"); },
+        CreatePreset: () => { if (InCombatLockdown()) { console.log("Create components after combat."); return; } if (creator === undefined) { console.log("Enable LumaUI.Editor to create components."); return; } creator(); options.OpenCustomization("editor"); },
         EditPreset: document => { if (InCombatLockdown()) { console.log("Edit components after combat."); return; } if (editor === undefined) { console.log("Enable LumaUI.Editor to edit components."); return; } editor(presets.Validate(document)); options.OpenCustomization("editor"); },
         OpenImport: (kind, callback, importString) => transfer.Import(kind, callback, importString),
         OpenExport: (document, clickCastPresets) => transfer.Export(document, clickCastPresets),
@@ -56,6 +60,7 @@ function initialize(): void {
     options.store.onReady(() => {
         installActionSlotCommands();
         core.RegisterModule("collections", new CollectionControls(core, presets));
+        core.RegisterModule("native-frames", new NativeFrameControls(core, presets.Layouts));
         options.Install();
         installLibrary(core);
         installClickCastLibrary(core);

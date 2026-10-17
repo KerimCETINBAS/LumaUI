@@ -11,6 +11,7 @@ export class CustomizationWindow {
     private readonly pages = new Map<string, CustomizationPage>();
     private selected = "dashboard";
     private returnPage = "dashboard";
+    private suspended?: string;
     private window?: Window;
     private pageMount?: { host: wuiraNativeFrame; content?: wuiraNativeFrame; refresh(): void };
 
@@ -29,6 +30,8 @@ export class CustomizationWindow {
     }
 
     public Open(id?: string): void {
+        if (InCombatLockdown()) return;
+        this.suspended = undefined;
         if (id !== undefined) {
             if (id !== "dashboard" && !this.pages.has(id)) {
                 console.log("LumaUI: enable the addon that provides the " + id + " page.");
@@ -44,14 +47,25 @@ export class CustomizationWindow {
         this.window.Open(() => this.View());
     }
 
-    public Close(): void { this.window?.Close(); }
+    public Close(): void { this.suspended = undefined; this.window?.Close(); }
+    public Suspend(): void {
+        if (!this.window?.IsOpen) return;
+        const page = this.pages.get(this.selected);
+        this.suspended = page?.workspace ? this.selected : undefined;
+        page?.Suspend?.(); this.window.Close();
+    }
+    public Resume(): void {
+        if (InCombatLockdown()) return;
+        const id = this.suspended; this.suspended = undefined;
+        if (id !== undefined && this.pages.has(id)) this.Open(id);
+    }
     public Refresh(): void {
         const page = this.pageMount;
-        if (!this.window?.IsOpen || page === undefined) return;
+        if (InCombatLockdown() || !this.window?.IsOpen || page === undefined) return;
         // Finish the native click callback before replacing the clicked controls.
         page.host.SetScript("OnUpdate", () => {
             page.host.SetScript("OnUpdate", undefined);
-            if (this.window?.IsOpen && this.pageMount === page) page.refresh();
+            if (!InCombatLockdown() && this.window?.IsOpen && this.pageMount === page) page.refresh();
         });
     }
 
@@ -119,7 +133,11 @@ export class CustomizationWindow {
                     decorations={{ background: new Background({ color: darkTheme.colors.surface }) }}>
                     <Label height={24} text="CUSTOMIZE" fontSize={10} color={darkTheme.colors.muted} />
                     {this.Nav({ id: "dashboard", title: "Dashboard" })}
-                    {Array.from(this.pages.values()).map(page => this.Nav({ id: page.id, title: page.title }))}
+                    {Array.from(this.pages.values()).filter(page => page.sidebar !== false).map(page => this.Nav({ id: page.id, title: page.title }))}
+                    <Button height={40} onClick={() => this.actions.SetMode("unlock")}
+                        decorations={{ background: new Background({ color: darkTheme.colors.surface }) }}>
+                        <ControlContent text="Unlock mode" icon="layout" width={184} height={40} size={12} />
+                    </Button>
                 </FlowLayout>}
                 <Cell width={width - (workspace ? 32 : 256)} padding={16} onMount={host => {
                     host.SetClipsChildren(true);

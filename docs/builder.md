@@ -1,5 +1,8 @@
 # Builder API
 
+Dynamic native nameplate rules use the skin API's `BlizzardElement` primitive and
+`UnitToBool` converter. See [nameplate factories and unit filtering](nameplates.md).
+
 The master exposes `LumaUI.Presets` and `LumaUI.Skins` through the `lumaui/core` contract. Optional addons supply additional compiled factories and native adapters. Imported strings contain data, never TypeScript or executable Lua.
 
 ## Component components
@@ -32,9 +35,9 @@ Component format, dependency transport and import/export policy belong to LumaUI
 
 A registered component may use `headless: true` and `Apply(props, context)` instead of `Create`. `Apply` returns its cleanup callback. Effects run only during `Mount`; neither `Create` nor `Preview` executes them. `Dispose` restores effects outside combat. Headless instances have no `View` or `Frame`.
 
-The built-in `hideActionBars` has no properties and hides stock action bars through shared, reversible ownership. It leaves native events, scripts and action slots intact. Any component can reference a separate headless hiding component; deactivation restores bars when no other component owns their hiding. Manual slot backup/clear/restore commands are provided by the core and have a separate lifetime.
+The built-in `hideUnitFrame` uses one native-frame target, including `unit: "actionBars"` for stock bars, through shared, reversible ownership. It leaves native events, scripts and action slots intact. Any component can reference a separate headless hiding component; deactivation restores bars when no other component owns their hiding. Manual slot backup/clear/restore commands are provided by the core and have a separate lifetime.
 
-The built-in `hideUnitFrame` accepts `unit: "player" | "target" | "focus"`. A `fragment` groups headless effects without adding layout space. A `preset` node uses a library ID:
+The built-in `hideUnitFrame` accepts `unit: "player" | "target" | "focus" | "actionBars"`. Older `hideActionBars` nodes are normalized to that target while retaining their IDs. A `fragment` groups headless effects without adding layout space. A `preset` node uses a library ID:
 
 ```ts
 { id: "hide-native-player", type: "preset", preset: "hide-player-frame", props: {} }
@@ -113,9 +116,19 @@ Batch assignment uses Core.Components.SetBindings(document, assignments). Every 
 
 The interface calls each saved reusable tree or headless behavior a **component**. **Collection** is reserved for grouping multiple components. Existing preset API names, stable IDs, SavedVariables keys and import formats remain compatible.
 
+## Connection-dependent visuals
+
+The `unitConnection` source reads the selected unit's connection state on connection, roster and world events, including unit-token reassignment. It returns `true`, `false`, or an unknown value when unavailable/restricted; editor previews use an online sample. It does not poll.
+
+The party/raid starters use ordinary case converters and alpha bindings to swap their resource area for a gray `OFFLINE` label. All nodes, colors, wording and converters are editable. Only visuals change during combat: secure hit areas and click mappings remain registered. Reconnection restores the same sources and frames. Role icons are omitted; the leader indicator remains.
+
+A new ForEach uses an empty generic `list` source and one item template. Bind a `groupMembers` source or a `KnownSpells(...)` helper explicitly when needed. Static `list` records are available to factories as `items`; every record must have a unique string or numeric `key`.
+
 ## Click Cast library
 
-Click Cast presets are a separate library of versioned `clickCast` records. The built-in **Standard** preset is always available and locked: left click targets the unit and right click opens its context menu. Named presets store a list of mouse/spell bindings (for example `BUTTON1` → Holy Light and `SHIFT-BUTTON1` → Flash of Light). Add or remove rows in the Click Cast page. Combinations are canonicalized and must be unique within a preset; different presets may reuse them. Existing single-binding records migrate automatically to version 2. Unmapped clicks retain the standard target/context actions. Each SecureButton references one preset, and any number of SecureButtons can share that preset. The button's own `unit` determines the target. Native secure attributes apply the combination; no global keyboard override is installed. Different presets may use the same mouse combination on different buttons. Manage presets from the **Click Cast** page, then choose one in the SecureButton **Actions** inspector. Definitions are stored in their own `lumaui.click-cast-library` SavedVariables token, independently of component definitions.
+Native frames also expose the same blue handles in `/luma unlock`: visible registered Edit Mode systems and common Blizzard roots (unit frames, minimap, chat, trackers and action bars). Positions are stored separately under `lumaui.native-frame-positions`, scoped to the active native layout key, with a fallback when Edit Mode is unavailable. Hidden frames remain hidden, children of movable roots do not receive overlapping handles, and protected frame updates wait until combat ends. Native Edit Mode temporarily owns its frames while open; Luma overrides resume afterward. `/luma reset` restores the native anchors and clears these overrides.
+
+Click Cast presets are a separate library of versioned `clickCast` records. The built-in **Standard** preset is always available and locked: left click targets the unit and right click opens its context menu. Named presets store a list of mouse/spell bindings (for example `BUTTON1` → Holy Light and `SHIFT-BUTTON1` → Flash of Light). Add or remove rows in the Click Cast page. Click a Binding field to focus it, then press mouse button 1–5 with optional Shift/Ctrl/Alt. The first click only starts capture; Escape cancels, focus loss cancels unfinished capture, and Delete/Backspace clears the draft. Fields show short readable labels such as `Shift + Left click` while storing canonical combinations. Combinations are canonicalized and must be unique within a preset; different presets may reuse them. Existing single-binding records migrate automatically to version 2. Unmapped clicks retain the standard target/context actions. Each SecureButton references one preset, and any number of SecureButtons can share that preset. The button's own `unit` determines the target. Each binding has a `targeting` mode (`direct` or `mouseover`) and its own `traits`: `friendly`, `enemy`, `nodead` and `clearTargeting`. Direct mode uses native secure spell/item actions on the button unit, including the client's automatic self-cast behavior. Mouseover mode generates a single `@mouseover,exists` cast/use clause without a fallback target, optionally with `nodead` and `help/harm`; an optional matching `/stopspelltarget` line clears a pending targeting cursor before the cast. Living only must be disabled for resurrection. Friendly/enemy restrictions also apply to direct actions through native secure help/harm remapping, evaluated at click time in combat. Named macros use Direct mode and retain their own target logic. New editor rows default to Mouseover with Living only and Clear targeting enabled; saved presets retain their choices. Legacy preset-level `traits.onlyTarget` becomes each row's mode and its disposition preferences are copied to those rows; new records store policy only on bindings. API calls that omit row policy on Update preserve it by canonical mouse combination. At least one disposition must remain enabled per row. Import/export preserves row policies and checks them when reusing equivalent presets. Native secure attributes apply the combination; no global keyboard override is installed. Different presets may use the same mouse combination on different buttons. Manage presets from the **Click Cast** page, then choose one in the SecureButton **Actions** inspector. Definitions are stored in their own `lumaui.click-cast-library` SavedVariables token, independently of component definitions.
 
 ### Party and raid starter components
 
@@ -125,7 +138,7 @@ Each uses a `groupMembers` source and a keyed `foreach` template. The source ret
 
 The native GUID is the primary key. Full name plus realm is the fallback, and a previously observed GUID remains associated with that identity if temporarily unavailable. For pets, fallback names are scoped to their owner. A roster update takes a small snapshot and reconciles keys: unchanged members retain their native cells, HP/power sources and subscriptions. DC/online causes no allocation. A member moving from `party2` to `party1` retargets the existing source and secure buttons together outside combat. Removed members dispose their own scope; new members create only their own scope.
 
-The filled class-colored strip on the left uses **Standard** selection/context-menu actions. The heading is transparent, the health bar omits its percentage row, and the primary-resource strip is two UI units high. The health area shares **Paladin · Heal**, the disease/poison compartment shares **Paladin · Purify**, and the movement compartment shares **Paladin · Freedom**. The initial spell IDs are editable in Click Cast. These presets are independent library records; component export currently contains their references, so the receiving library must also contain the corresponding Click Cast records.
+In the party starter, the class-colored name heading uses **Standard** selection/context-menu actions, replacing the left strip. The raid starter retains its selection strip and transparent heading; the health bar omits its percentage row, and the primary-resource strip is two UI units high. The health area shares **Paladin · Heal**, the disease/poison compartment shares **Paladin · Purify**, and the movement compartment shares **Paladin · Freedom**. The initial spell IDs are editable in Click Cast. These presets are independent library records. Import and export each offer an independent **Click Cast: Yes/No** switch. When enabled, the transfer includes the referenced preset definitions and restores their links; conflicting IDs are remapped. When disabled, custom links in the transferred copy become Standard unit interactions, including nested components. Existing local Click Cast presets and the source component remain unchanged.
 
 Health uses native HP sources with optional heal/absorb overlays. The resource strip displays current primary power, including mana, rage and energy. Names, health numbers, roles, leader indicators and aura icons update from events. Health numbers go directly to native font formatting without arithmetic on restricted values.
 
@@ -137,7 +150,7 @@ There are no speculative unit slots. Structural roster updates, token retargetin
 
 LumaUI owns these selection helpers; wuira continues to supply the native cached spellbook and widgets. Expressions select registered compiled factories and serialize as data. No TypeScript, Lua, loadstring or filesystem code is generated in the game.
 
-In the editor, choose **New > Spell list**, select ForEach, then set **Data > List helper**:
+In the editor, choose **New**, add ForEach, then set **Data > List helper**:
 
 ```text
 KnownSpells("Holy Light", "Seal*", /^Blessing of .*/i)
@@ -184,6 +197,32 @@ The direct helper retains passive metadata; the builder's spell-button source de
 
 Additional helpers can use `Presets.RegisterListHelper(name, { source, Parse })` and a registered source factory. A list source implements `items: { Value, onChange }`, supplies `ItemsKey`, and optionally `BindItem(read)` to expose a source for the current result. Unit lists also supply `ItemsUnit`, `ItemsGroup` and `ItemsTemplate`; the generic renderer does not assume every item represents a unit.
 
+## Shared preview component
+
+The master exposes `LumaUI.Preview(props)`, a normal wuira component returning a Cell tree. Editor is optional: import dialogs and other core pages can mount the same preview.
+
+```tsx
+return LumaUI.Preview({
+    document,
+    width: 600,
+    height: 360,
+    zoom: "fit",
+    selected: selectedId,
+    onSelect: id => selectElement(id),
+    onZoomChange: zoom => rememberZoom(zoom),
+});
+```
+
+Zoom defaults to 1:1. The built-in controls zoom in/out, reset to 1:1 or fit the component to the viewport. Zoom affects existing preview frames and does not mutate document dimensions, anchors or offsets. Import automatically validates pasted text and previews visual components before saving. Fully headless components omit the preview. Invalid text has a red border and an inline error; validation preserves textbox focus. Preview construction disables secure actions and headless effects; disposing its Cell releases the preview instance and subscriptions.
+
+## Editor session
+
+Each panel has an Expand/Restore control. Hierarchy stays on the left and Properties on the right; Preview, Component and Sources occupy the center tabs. The editor tracks up to 60 data snapshots for undo/redo. Selecting elements, expanding panels and zooming do not add history entries. New edits clear the redo branch; opening a different document starts a new history.
+
+Save persists the component and updates its live instance. Undo after Save changes the draft until the next Save. The unsaved indicator also includes unfinished property/source fields. Deleted subtrees can be restored with their stable IDs and bindings.
+
+Customization pages can implement `Suspend()` to retain native input before combat closes the window. Workspace pages reopen after combat; the editor retains its draft, unfinished fields, rename text, panels, scroll and zoom in the current session. Combat never applies or saves the draft automatically.
+
 ## Character action factory
 
 LumaUI.Helpers.PlayerActions() creates a disposable, cached observable/iterable list. Entries have key, category, name, optional detail/icon, and a spellId, itemId or named macro action. Categories are spell, item, consumable and macro. Passive spells, items without use effects and ambiguous duplicate macro names are omitted. Native spellbook, equipment, bag, item-cache and macro events refresh the list; reading Value never polls the game.
@@ -204,4 +243,14 @@ The core retains `/lumaclearbars` and `/lumarestorebars` and the existing `LumaU
 
 ## Editor workspace
 
-Customization pages can declare workspace: true to use the full content width without the configuration sidebar. Back returns to the previous regular page. LumaUI.Editor registers a preset creator as well as an editor; UI Library calls CreatePreset(kind), while EditPreset(document) loads a saved component. Creation only opens a draft until Save. The editor uses one Save command to validate pending fields and reconcile the live component. Panel focus, folds and selection overlays remain editor-only state.
+Customization pages can declare workspace: true to use the full content width without the configuration sidebar. Back returns to the previous regular page. LumaUI.Editor registers a preset creator as well as an editor; UI Library calls CreatePreset(), while EditPreset(document) loads a saved component. New sits beside Import and opens an empty root group. Visual layouts and headless effects use the same creation path; party, raid and spell examples are optional imports, not editor modes. Creation only opens a draft until Save. The editor uses one Save command to validate pending fields and reconcile the live component. Panel focus, folds and selection overlays remain editor-only state.
+
+### Reusable component instances
+
+Select a component reference in the hierarchy to edit its own activation mode, class, group condition and native layout. Each field defaults to the shared component setting; overrides affect only this instance. Always bypasses these rules; Never keeps the instance inactive. Parent activation still controls the lifetime of the whole tree. Existing combat deferral applies.
+
+In the child's Sources panel, check **Expose as prop** to declare an empty typed input instead of a datasource constructor. Check **Optional input** when omission is allowed. In the parent, select the reference and connect each Data input to a parent source of the same registered type. The exact SourceInstance is borrowed; no additional datasource, underlying observer, forwarding wrapper or child-owned disposer is created. Rendering consumers still subscribe to that shared source as needed. Required unbound inputs keep the instance inactive; optional unbound inputs omit dependent visuals. A source can itself be forwarded through another exposed input.
+
+The serialized fields are SourceSpec.isProp/optional and reference-node sourceProps/activation. A child source is {name: "health", type: "hp", props: {}, isProp: true, optional: false}. A reference is {id: "pet", type: "preset", preset: "pet-frame", props: {}, activation: {enabled: "condMet", class: "HUNTER"}, sourceProps: {health: "petHealth"}}. These are document data, not executable callbacks.
+
+New component IDs derive from names. Renaming a saved component asks whether to update saved library references: Yes rewrites them; No leaves explicit missing references for manual repair, with no old-name alias. Open the affected component and select a replacement in its reference inspector. Duplicate names are offered numbered suffixes (1), (2), and require confirmation. Imports have an optional name field; Import copy confirms a separate numbered instance. Existing library IDs are preserved until explicitly renamed.

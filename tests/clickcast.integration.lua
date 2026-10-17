@@ -82,19 +82,30 @@ do
   local result={};for _,frame in ipairs(nativeFrames) do if frame.kind=='EditBox' and frame:IsVisible() then result[#result+1]=frame end end
   return result
  end
+ local function bind(input,button,shift)
+  local original=IsShiftKeyDown
+  IsShiftKeyDown=function() return shift==true end
+  input.scripts.OnMouseDown(input,'LeftButton')
+  input.scripts.OnMouseDown(input,button)
+  IsShiftKeyDown=original
+ end
  render()
  local fields=inputs();assert(#fields==2,'spell IDs are never typed by the user')
- fields[1]:SetText('Multi UI');fields[2]:SetText('BUTTON1')
+ fields[1]:SetText('Multi UI');bind(fields[2],'LeftButton')
+ assert(fields[2].text=='Left click','capture fields display short readable labels')
  click('Choose action...');click('Spell 20271')
  click('Add binding');fields=inputs()
  assert(#fields==3 and fields[1].text=='Multi UI','opening the picker and adding a row preserve typed fields')
- fields[3]:SetText('SHIFT-BUTTON1')
+ bind(fields[3],'LeftButton',true)
+ assert(fields[3].text=='Shift + Left click','modifiers are captured without typing a combination')
  click('Choose action...');local search=inputs();search=search[#search];search:SetText('26573');search.scripts.OnTextChanged(search)
- click('Spell 26573');click('Save preset')
+ click('Spell 26573');click('[x] Living only');click('[x] Clear targeting');click('[x] Enemy');click('[ ] Direct secure action');click('Save preset')
  local uiPreset;for _,item in ipairs(library:List()) do if item.name=='Multi UI' then uiPreset=item end end
  assert(uiPreset and #uiPreset.bindings==2 and uiPreset.bindings[1].spellId==20271 and uiPreset.bindings[2].spellId==26573,'the native picker saves selected IDs for all rows')
+ assert(uiPreset.bindings[1].targeting=='mouseover' and uiPreset.bindings[1].traits.nodead and uiPreset.bindings[1].traits.clearTargeting and uiPreset.bindings[1].traits.enemy,'new bindings start with guarded mouseover targeting')
+ assert(uiPreset.bindings[2].targeting=='direct' and not uiPreset.bindings[2].traits.nodead and not uiPreset.bindings[2].traits.clearTargeting and not uiPreset.bindings[2].traits.enemy,'editing a row changes only its own targeting and checkboxes')
  click('X');click('Save preset');assert(#library:Get(uiPreset.id).bindings==1,'removing a row persists the shortened preset')
- click('Add binding');fields=inputs();fields[3]:SetText('button1');click('Choose action...');click('Spell 679');click('Save preset')
+ click('Add binding');fields=inputs();bind(fields[3],'LeftButton');click('Choose action...');click('Spell 679');click('Save preset')
  assert(#library:Get(uiPreset.id).bindings==1 and #inputs()==3,'conflicting edits preserve both saved data and the draft')
  click('Spell 679');click('Macros');click('Cancel')
  wuira:Unmount(view);library:Delete(uiPreset.id)

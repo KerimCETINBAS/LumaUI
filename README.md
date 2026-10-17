@@ -1,5 +1,11 @@
 # LumaUI
 
+<p align="center">
+  <a href="assets/branding/lumaui-logo-v1.png">
+    <img src="assets/branding/lumaui-logo-v1.png" alt="LumaUI logo" width="280" />
+  </a>
+</p>
+
 **Build an interface that fits the way you play.**
 
 LumaUI is an in-game UI builder for **WoW Forever**. Create resource displays, cooldown buttons and party or raid layouts, arrange them on your screen, and share your work with a single import string.
@@ -22,9 +28,12 @@ The optional visual editor gives your work the full configuration workspace:
 
 - A ribbon of element tools and reusable components, with a textbox to filter your library.
 - A collapsible hierarchy with drag-and-drop ordering and nesting.
-- An actual-size preview with click-to-select.
+- A shared preview with click-to-select, zoom controls, 1:1 sizing and Fit.
+- Expand any panel, with Preview, Component and Sources tabs in the center workspace.
 - Organized properties, editable data sources and activation rules.
-- One **Save** action to keep your changes and update the live component.
+- Undo/redo for layout, property and source edits, including deleted element trees.
+- One **Save** action with an unsaved-changes indicator.
+- Combat pauses the editor and restores its unfinished forms and workspace when combat ends.
 
 Use **Unlock** to position your components on the game screen. Choose when they load by class, party or raid state, or the active native Edit Mode layout.
 
@@ -32,7 +41,7 @@ Use **Unlock** to position your components on the game screen. Choose when they 
 
 Turn a spell into a cooldown button, assign a key, or attach a named Click Cast preset to a unit button. Search your character's learned spells, usable items, consumables and macros when choosing an action.
 
-A Click Cast preset can hold multiple mouse and modifier combinations and be reused across buttons. The built-in **Standard** preset provides left-click selection and a right-click unit menu.
+A Click Cast preset can hold multiple mouse and modifier combinations and be reused across buttons. Friendly and Enemy checkboxes restrict which clicked units can invoke its bindings. Only clicked unit uses an explicit spell/item target with no fallback clause; named macros retain their own targeting and cannot use that option. The built-in **Standard** preset provides left-click selection and a right-click unit menu.
 
 ## Share what you build
 
@@ -67,7 +76,7 @@ When upgrading from a build that included **LumaUI.ActionBars**, remove the old 
 
 1. Open **`/luma`**, the **L** launcher beside the minimap, or LumaUI in game options.
 2. Open **Built-in presets**, choose a starter and confirm **Import**. Imported components start disabled; enable the one you want in **UI Library**.
-3. With the Editor enabled, choose **Edit**, customize the component and press **Save**. To start from scratch, use **New blank**, **New party**, **New raid**, **New spell list** or **New headless** in UI Library.
+3. With the Editor enabled, choose **Edit**, customize the component and press **Save**. To start from scratch, choose **New** beside **Import component** in UI Library. Build any component with the shared element and source factories.
 4. Use **`/luma unlock`** to move it, **`/luma bind`** to assign keys, and **`/luma lock`** to finish.
 
 Built-in presets are optional imports. Your saved layouts, activation rules and bindings remain your own as the addon develops. The party and raid starters currently include Paladin click actions; choose the spells and ranks you want in **Click Cast**.

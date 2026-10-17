@@ -19,6 +19,7 @@ export function buildAddons(outputRoot) {
     const cli = path.join(path.dirname(require.resolve("wuira/package.json")), "cli/wuira.mjs");
     for (const addon of addons) {
         run(process.execPath, [cli, "build"], { cwd: path.join(root, addon.directory), env: { ...process.env, LUMAUI_OUTPUT_ROOT: outputRoot } });
+        fs.copyFileSync(path.join(root, "LICENSE"), path.join(outputRoot, addon.name, "LICENSE"));
         const toc = path.join(outputRoot, addon.name, addon.name + ".toc");
         const content = fs.readFileSync(toc, "utf8");
         if (!/^## Version: .+$/m.test(content)) throw new Error("TOC is missing its version: " + toc);

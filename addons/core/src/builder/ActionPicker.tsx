@@ -33,7 +33,7 @@ export class ActionPicker {
     private RefreshResults(): void {
         if (this.results === undefined || this.scroll === undefined || this.catalog === undefined) return;
         const query = this.search.trim().toLowerCase();
-        const entries = this.catalog.Value.filter(item => item.category === this.category && (item.name.toLowerCase().includes(query) || (item.detail ?? "").toLowerCase().includes(query)));
+        const entries = this.catalog.Value.filter(item => item.category === this.category && (item.name.toLowerCase().includes(query) || (item.detail ?? "").toLowerCase().includes(query))).slice(0, 48);
         const colors = this.core.Theme.colors, width = 508;
         const view = wuira.Mount(<FlowLayout width={width} height={Math.max(40, entries.length * 40)} gap={4}>
             {entries.length === 0 ? <Label height={40} text="No matching character actions. Learn a spell, equip a usable item, carry a consumable or create a named macro." fontSize={11} /> : entries.map(item =>

@@ -9,10 +9,10 @@ const groups = [
     { id: "layout", name: "Layout", icon: "layout", kinds: ["cell", "flow", "grid", "foreach", "fragment"] },
     { id: "display", name: "Visuals", icon: "visuals", kinds: ["progress", "action", "label", "icon"] },
     { id: "unit", name: "Units", icon: "units", kinds: ["unitPortrait", "unitText", "unitIndicator", "unitAuras", "unitAuraIndicator"] },
-    { id: "effects", name: "Effects", icon: "effects", kinds: ["hideUnitFrame", "hideActionBars"] },
+    { id: "effects", name: "Effects", icon: "effects", kinds: ["hideUnitFrame", "blizzardElement"] },
     { id: "components", name: "Components", icon: "component", kinds: [] as string[] },
 ];
-const short: Record<string, string> = { cell: "Cell", flow: "Flow", grid: "Grid", foreach: "Repeat", fragment: "Group", progress: "Bar", action: "Button", label: "Text", icon: "Icon", unitPortrait: "Portrait", unitText: "Unit text", unitIndicator: "Role / leader", unitAuras: "Auras", unitAuraIndicator: "Aura indicator", hideUnitFrame: "Hide unit", hideActionBars: "Hide bars" };
+const short: Record<string, string> = { cell: "Cell", flow: "Flow", grid: "Grid", foreach: "Repeat", fragment: "Group", progress: "Bar", action: "Button", label: "Text", icon: "Icon", unitPortrait: "Portrait", unitText: "Unit text", unitIndicator: "Role / leader", unitAuras: "Auras", unitAuraIndicator: "Aura indicator", hideUnitFrame: "Hide frame" };
 export function Toolbox({ draft, width }: { draft: EditorDraft; width: number }) {
     const choices = elementChoices(), sections = [...groups];
     const extras = choices.filter(choice => !groups.some(group => group.kinds.includes(choice.value)));

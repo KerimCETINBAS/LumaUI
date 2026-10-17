@@ -10,7 +10,7 @@ export class BuiltinPresetLibrary {
     private readonly entries = new Map<string, Description>();
     public constructor(core: LumaCoreAPI, private readonly strings: Record<string, string>) {
         for (const entry of BuiltinPresetEntries) this.Register({ ...entry, importString: BuiltinPresets[entry.key] });
-        core.RegisterPage({ id: "builtin-presets", title: "Built-in presets", summary: "Optional presets you can import manually.", Render: context => {
+        core.RegisterPage({ id: "builtin-presets", title: "Built-in presets", sidebar: false, summary: "Optional presets you can import manually.", Render: context => {
             const colors = core.Theme.colors;
             return <FlowLayout width={context.width} height={context.height} padding={10} gap={8}>
                 <Label height={28} text="Built-in presets" fontSize={20} color={colors.accent} />

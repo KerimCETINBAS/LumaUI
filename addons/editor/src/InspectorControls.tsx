@@ -1,3 +1,5 @@
+import { SpellField } from "./SpellField";
+import { IconField } from "./IconField";
 import { UI, wuira } from "wuira";
 import type { Cell as View } from "wuira";
 import type { PropertyRule } from "lumaui/core";
@@ -16,29 +18,31 @@ export const labels: Record<string, string> = {
     background: "Bar background", backdrop: "Bar border", min: "Minimum", max: "Maximum", current: "Current value", value: "Value (alias)",
     orientation: "Orientation", reverse: "Reverse fill", healPrediction: "Incoming heals", absorbPrediction: "Absorbs",
     text: "Text", font: "Font path", fontSize: "Font size", align: "Text alignment", texCoords: "Texture crop (left, right, top, bottom)",
-    action: "Action", binding: "Key binding", showHotkey: "Show key binding", finishGlow: "Flash when cooldown ends", button: "Mouse button",
-    unit: "Unit", spellId: "Spell ID", spellIds: "Spell IDs (comma separated)", filter: "Aura filter", regenTimer: "Track mana regeneration",
+    action: "Action", binding: "Key binding", showHotkey: "Show key binding", showTooltip: "Show action tooltip", finishGlow: "Flash when cooldown ends", button: "Mouse button",
+    unit: "Unit", spellId: "Spell", spellIds: "Spells", movementSpellIds: "Movement effects", filter: "Aura filter", regenTimer: "Track mana regeneration",
     healPredictionSource: "Track incoming heals", healPredictionResource: "Track incoming heals", absorbPredictionResource: "Track absorbs",
     activeAlpha: "Opacity while active", inactiveAlpha: "Opacity while inactive", source: "Parent source", channel: "Channel name",
     tileX: "Repeat horizontally", tileY: "Repeat vertically", blendMode: "Blend mode", thickness: "Thickness", radius: "Corner radius",
     selectors: "Spell filters", includePassive: "Include passive spells",
     scope: "Group scope", pets: "Include pets", key: "Stable member key", groupBy: "Group columns by", wrapAfter: "Members per column",
-    unitWatch: "Hide absent units", classBorder: "Use class border color", classBackground: "Use class background color", field: "Displayed field", category: "Aura category", maxIcons: "Maximum icons", iconSize: "Icon size", compartmentBorder: "Active compartment border", hoverBackground: "Hover background",
+    unitWatch: "Hide absent units", field: "Displayed field", category: "Aura category", maxIcons: "Maximum icons", iconSize: "Icon size", compartmentBorder: "Active compartment border", hoverBackground: "Hover background",
     top: "Top", right: "Right", bottom: "Bottom", left: "Left", r: "Red", g: "Green", b: "Blue", a: "Opacity",
+    path: "Input value path", expression: "Formula", default: "Default output", cases: "Cases",
     type: "Action type", spell: "Spell name or ID", item: "Item name or ID", macro: "Macro name or number", slot: "Action slot",
 };
 const choices: Record<string, string> = {
-    auto: "Party or raid", party: "Party", raid: "Raid", group: "Raid subgroup", key: "Member identity",
+    player: "Player", target: "Target", focus: "Focus", actionBars: "Action bars", auto: "Party or raid", party: "Party", raid: "Raid", group: "Raid subgroup", key: "Member identity",
     buffs: "Buffs", dispellable: "Dispellable debuffs", movement: "Movement effects", other: "Other debuffs",
     name: "Name", health: "Health", percent: "Health percent", role: "Role", leader: "Group leader",
     horizontal: "Horizontal", vertical: "Vertical", fixed: "Fixed size", content: "Fit to contents", absolute: "Screen", relative: "Relative to parent",
     start: "Start", center: "Center", end: "End", TOPLEFT: "Top left", TOP: "Top", TOPRIGHT: "Top right", LEFT: "Left", CENTER: "Center",
     RIGHT: "Right", BOTTOMLEFT: "Bottom left", BOTTOM: "Bottom", BOTTOMRIGHT: "Bottom right", HELPFUL: "Buffs", HARMFUL: "Debuffs",
-    "HELPFUL|PLAYER": "My buffs", "HARMFUL|PLAYER": "My debuffs", spell: "Cast spell", item: "Use item", macro: "Run macro", action: "Action slot", target: "Target unit",
+    "HELPFUL|PLAYER": "My buffs", "HARMFUL|PLAYER": "My debuffs", spell: "Cast spell", item: "Use item", macro: "Run macro", action: "Action slot",
 };
 export function friendly(value: string): string { return choices[value] ?? labels[value] ?? value; }
 export function sourceType(value: string): string {
-    const names: Record<string, string> = { knownSpells: "Known spells", hp: "Health", mana: "Mana", power: "Primary resource", groupMembers: "Party / raid members", aura: "Buff / debuff", spell: "Spell", gcd: "Global cooldown", cooldown: "Spell cooldown", cast: "Cast timer", swing: "Swing timer", totem: "Totem timer", channel: "Source channel" };
+    if (value === "unitToBool") return "Unit → boolean";
+    const names: Record<string, string> = { list: "Static list", unitConnection: "Unit connection", class: "Unit class", caseConverter: "Case converter", mathConverter: "Math converter", knownSpells: "Known spells", hp: "Health", mana: "Mana", power: "Primary resource", groupMembers: "Party / raid members", aura: "Buff / debuff", spell: "Spell", gcd: "Global cooldown", cooldown: "Spell cooldown", cast: "Cast timer", swing: "Swing timer", totem: "Totem timer", channel: "Source channel" };
     return names[value] ?? value;
 }
 export function Action({ text, onClick, width }: { text: string; onClick(): void; width: number }) {
@@ -62,6 +66,8 @@ export function Input({ state, name, width, value }: { state: FormState; name: s
         onMount={frame => { const input = new TextInput(frame, { text: value ?? state.values[name] ?? "", maxBytes: 4096 }); const remove = state.Capture(name, () => input.Value); return () => { remove(); input.Dispose(); }; }} />;
 }
 export function Field({ state, name, title, rule = { type: "string" }, width, compact = false }: { state: FormState; name: string; title?: string; rule?: PropertyRule; width: number; compact?: boolean }) {
+    if (rule.editor === "spell") return <SpellField state={state} name={name} title={title ?? friendly(name)} rule={rule} width={width} />;
+    if (rule.editor === "icon") return <IconField state={state} name={name} title={title ?? friendly(name)} width={width} />;
     const value = state.values[name] ?? "";
     const options = rule.values?.map(value => ({ label: friendly(String(value)), value: String(value) }));
     const step = rule.max === 1 ? .05 : 1;

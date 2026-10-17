@@ -63,3 +63,13 @@ Both addons share one version. For each release:
 The tag workflow validates version metadata, installs locked dependencies, builds and tests the addons, and publishes a GitHub Release with the archive and checksum. Prerelease versions produce GitHub prereleases. It uses the repository's built-in `GITHUB_TOKEN`.
 
 CurseForge submission and publishing are a separate preparation milestone; see [release readiness](release-readiness.md).
+
+## Client catalogs
+
+Inspector spell lists are generated from the packaged `wuira/data/spells/forever.json`; icon choices use `wuira/data/icons/forever.json`. LumaUI owns the search interface, while wuira owns extraction from the pinned Forever client tables and the generated enums. Normal builds use committed generated search data without network requests.
+
+The current dependency is published `wuira@0.2.6`. After upgrading the SDK, run `npm run catalogs:generate`. To validate an unreleased SDK, each generator accepts `--package <directory>` pointing to an extracted npm package.
+
+## Source conversion
+
+wuira owns the typed callback `SourceConverter`, checked reads and event subscription lifecycle. LumaUI owns serializable `caseConverter` and `mathConverter` factories, the formula parser and editor controls. See [source converters](source-converters.md) for authoring and binding examples.

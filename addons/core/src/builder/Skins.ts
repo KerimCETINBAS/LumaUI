@@ -1,10 +1,13 @@
 import type { StoreRegistry } from "wuira/store";
-import type { SkinAPI, SkinDocument, SkinInstance, SkinTargetDefinition } from "../core/builder";
+import type { BlizzardElementProps, SkinAPI, SkinDocument, SkinInstance, SkinTargetDefinition } from "../core/builder";
+import { BlizzardElement, registerBlizzardElement } from "./BlizzardElement";
 import { Library, afterCombat, disposeAll } from "./Library";
 import { array, copy, fail, identifier, keys, properties, record, text } from "./validate";
 
-/** Explicit native adapters only; a skin never creates a wuira replacement tree. */
+/** Fixed native adapters and explicitly registered dynamic visual rules. */
 export class Skins extends Library<SkinDocument> implements SkinAPI {
+    public readonly BlizzardElement = BlizzardElement;
+    public RegisterElement(props: BlizzardElementProps): SkinInstance { return registerBlizzardElement(props); }
     private readonly paused = new Set<string>();
     private readonly targets = new Map<string, SkinTargetDefinition>();
     private readonly active = new Map<string, { document: SkinDocument; handle: SkinInstance }>();

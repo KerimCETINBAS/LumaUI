@@ -1,6 +1,6 @@
 {
   "name": "lumaui-monorepo",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "license": "MIT",
   "engines": {
@@ -19,11 +19,12 @@
     "release:check": "node tools/release.mjs --check",
     "build:release": "node tools/release.mjs",
     "presets:generate": "node tools/generate-builtin-presets.mjs",
-    "icons:preview": "node tools/build-icons.mjs --preview"
+    "icons:preview": "node tools/build-icons.mjs --preview",
+    "catalogs:generate": "node tools/generate-spell-catalog.mjs && node tools/generate-icon-catalog.mjs"
   },
   "devDependencies": {
     "@resvg/resvg-js": "2.6.2",
     "fengari-node-cli": "^0.1.0",
-    "wuira": "0.2.4"
+    "wuira": "0.2.8"
   }
 }

@@ -103,17 +103,30 @@ export class PropertyEditor {
         if (!this.Categories.includes(this.category)) this.category = this.Categories[0];
         for (const field of this.Fields(true)) {
             const value = read(this.props, field.path);
-            const text = value === undefined || (typeof value === "object" && !Array.isArray(value)) ? "" : Array.isArray(value) ? value.join(", ") : String(value);
+            const text = value === undefined || (typeof value === "object" && !Array.isArray(value)) ? "" : Array.isArray(value) ? value.length === 0 ? "[]" : value.join(", ") : String(value);
             this.values[field.path.join(".")] = text; this.baseline[field.path.join(".")] = text;
         }
+        for (const target of ["backgroundColor", "borderColor", "alpha", "color"]) {
+            const key = "$property." + target + ".path", value = this.draft.Selected.bindings?.[target]?.path ?? "";
+            this.values[key] = value; this.baseline[key] = value;
+        }
         this.bindingPath = this.draft.Selected.sourcePath ?? "";
-        this.itemsExpression = this.draft.Selected.items ?? 'KnownSpells("Seal*")'; this.baselineItems = this.itemsExpression;
+        this.itemsExpression = this.draft.Selected.items ?? ""; this.baselineItems = this.itemsExpression;
     }
     public Capture(key: string, read: () => string): () => void {
         this.inputs.set(key, read); return () => { if (this.inputs.get(key) === read) { if (key === "$path") this.bindingPath = read(); else if (key === "$items") this.itemsExpression = read(); else this.values[key] = read(); this.inputs.delete(key); } };
     }
     public Flush(): void { for (const [key, read] of this.inputs) { if (key === "$path") this.bindingPath = read(); else if (key === "$items") this.itemsExpression = read(); else this.values[key] = read(); } }
-    public Bind(name?: string): void { this.Flush(); this.draft.BindSource(name, this.binding, this.binding === "source" ? this.bindingPath : undefined); this.Open(); }
+    public Bind(name?: string): void {
+        this.Flush();
+        const pending = Object.entries(this.values).filter(([key, value]) => value !== this.baseline[key]);
+        const previousPath = this.bindingPath, pendingItems = this.itemsExpression !== this.baselineItems ? this.itemsExpression : undefined;
+        this.draft.BindSource(name, this.binding, this.binding === "source" ? this.bindingPath : undefined);
+        const replacedProgress = this.binding === "source" && name !== undefined && this.draft.Selected.source === name && this.draft.Selected.kind === "progress";
+        this.Open();
+        for (const [key, value] of pending) if (!replacedProgress || !["min", "max", "current", "value"].includes(key)) this.values[key] = value;
+        if (this.binding !== "source") { this.bindingPath = previousPath; if (pendingItems !== undefined) this.itemsExpression = pendingItems; }
+    }
     public get HasChanges(): boolean { this.Flush(); return this.nodeId === this.draft.selected && (Object.keys(this.values).some(key => this.values[key] !== this.baseline[key]) || this.bindingPath !== (this.draft.Selected.sourcePath ?? "") || this.itemsExpression !== this.baselineItems); }
     public Save(): boolean {
         this.Flush();
@@ -125,11 +138,12 @@ export class PropertyEditor {
                 const type = field.rule.type;
                 let value: DataValue | undefined;
                 if (raw === "") value = undefined;
+                else if (type === "texture") value = raw.trim() !== "" && Number.isInteger(Number(raw)) && Number(raw) > 0 ? Number(raw) : raw;
                 else if (type === "number" || type === "spacing" || type === "size") value = raw === "inherit" && type === "size" ? raw : Number(raw);
                 else if (type === "boolean" || type === "background" || type === "border") {
                     if (raw !== "true" && raw !== "false") throw "Use true, false or leave empty";
                     value = raw === "true";
-                } else if (type === "texCoords" || type === "numbers") value = raw.split(",").map(value => Number(value.trim()));
+                } else if (type === "texCoords" || type === "numbers") value = raw === "[]" && type === "numbers" ? [] : raw.split(",").map(value => Number(value.trim()));
                 else if (nested(field.rule) !== undefined) throw "Edit the fields inside " + key;
                 else value = raw;
                 write(props, field.path, value);
@@ -141,7 +155,18 @@ export class PropertyEditor {
                     for (const key of ["r","g","b"]) if (value[key] === undefined) value[key] = 1;
                 }
             }
-            this.draft.UpdateProperties(props, this.bindingPath, this.itemsExpression === this.baselineItems ? undefined : this.itemsExpression); this.Open(); return true;
+            const action = props.action;
+            if (action !== undefined && typeof action === "object" && !Array.isArray(action)) {
+                const payload: Record<string, string> = { spell: "spell", item: "item", macro: "macro", action: "slot", target: "unit" };
+                for (const key of ["spell", "item", "macro", "slot"]) if (key !== payload[String(action.type)]) delete action[key];
+                if (action.type === "macro") delete action.unit;
+            }
+            const bindings = { ...this.draft.Selected.bindings };
+            for (const [target, binding] of Object.entries(bindings)) {
+                const path = (this.values["$property." + target + ".path"] ?? binding.path ?? "").trim();
+                bindings[target] = { source: binding.source, ...(path === "" ? {} : { path }) };
+            }
+            this.draft.UpdateProperties(props, this.bindingPath, this.itemsExpression === this.baselineItems ? undefined : this.itemsExpression, bindings); this.Open(); return true;
         } catch (failure) { this.draft.Report(String(failure)); return false; }
     }
 }

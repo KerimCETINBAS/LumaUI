@@ -27,6 +27,8 @@ function releaseMetadata() {
     return { version, notes };
 }
 function validateAddon(directory, name, version) {
+    const license = fs.readFileSync(path.join(directory, "LICENSE"), "utf8");
+    if (license !== fs.readFileSync(path.join(root, "LICENSE"), "utf8")) throw new Error("Missing or incorrect MIT license: " + name);
     const toc = fs.readFileSync(path.join(directory, name + ".toc"), "utf8");
     if (!toc.includes("## Version: " + version)) throw new Error("Incorrect TOC version: " + name);
     const entries = toc.split(/\r?\n/).filter(line => line.trim() && !line.startsWith("#"));
@@ -50,7 +52,6 @@ try {
         for (const addon of addons) {
             const directory = path.join(stage, addon.name);
             validateAddon(directory, addon.name, version);
-            fs.copyFileSync(path.join(root, "LICENSE"), path.join(directory, "LICENSE"));
             fs.copyFileSync(path.join(root, "CHANGELOG.md"), path.join(directory, "CHANGELOG.md"));
             fs.copyFileSync(path.join(root, addon.name === "LumaUI" ? "README.md" : path.join(addon.directory, "README.md")), path.join(directory, "README.md"));
             if (addon.name === "LumaUI") fs.cpSync(path.join(root, "docs"), path.join(directory, "docs"), { recursive: true });

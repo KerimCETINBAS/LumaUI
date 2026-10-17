@@ -1,3 +1,4 @@
+import { EditHistory, cloneData, equalData } from "./EditHistory";
 import { Store } from "wuira/store";
 import type { PresetDocument, PresetNode, SourceSpec, Properties, ActivationMode, CollectionClass, CollectionCondition } from "lumaui/core";
 import { PropertyEditor } from "./PropertyEditor";
@@ -7,6 +8,9 @@ import { elementDefaults, elementLabel } from "./ElementCatalog";
 
 export type NodeKind = string;
 export interface EditorNode {
+    activation?: PresetNode["activation"];
+    sourceProps?: PresetNode["sourceProps"];
+    bindings?: PresetNode["bindings"];
     id: string;
     parent: string;
     kind: NodeKind;
@@ -44,12 +48,15 @@ export class EditorSettings extends Store {
     public dependencies: PresetDocument[] = [];
 }
 
+type DraftSnapshot = Pick<EditorDraft, "nodes" | "sources" | "dependencies" | "nextId" | "documentId" | "documentName" | "owner" | "activationMode" | "collectionClass" | "collectionCondition" | "nativeLayout" | "layoutPositions" | "selected">;
+function sameDraft(a: DraftSnapshot, b: DraftSnapshot): boolean { return equalData({ ...a, selected: "" }, { ...b, selected: "" }); }
 /** Session draft backed by the same preset format used by the master runtime. */
 export class EditorDraft {
     public nodes: EditorNode[];
     public nextId: number;
     public documentId: string;
     public documentName: string;
+    public identityPrompt?: { id: string; name: string; duplicate: boolean; rename: boolean };
     public renaming = false;
     public renameValue = "";
     private renameInput?: () => string;
@@ -58,7 +65,7 @@ export class EditorDraft {
     public CancelRename(): void { this.renaming = false; this.renameInput = undefined; Core.RefreshCustomization(); }
     public CaptureRename(read: () => string): () => void { this.renameInput = read; return () => { if (this.renameInput === read) { this.renameValue = read(); this.renameInput = undefined; } }; }
     public Rename(value = this.renameInput?.() ?? this.renameValue): boolean {
-        try { const document = Core.Presets.Validate({ ...this.Document(), name: value.trim() }); this.documentName = document.name; this.renameValue = document.name; this.renaming = false; this.Changed("Component renamed. Save to update the library."); return true; }
+        try { const document = Core.Presets.Validate({ ...this.Document(), name: value.trim() }, true); this.documentName = document.name; this.renameValue = document.name; this.renaming = false; this.Changed("Component renamed. Save to update the library."); return true; }
         catch (failure) { this.renameValue = value; this.Report(String(failure)); return false; }
     }
     public owner?: string;
@@ -73,17 +80,57 @@ export class EditorDraft {
     public inspector: "properties" | "sources" | "collection" = "properties";
     public readonly propertyEditor = new PropertyEditor(this);
     public readonly sourceEditor = new SourceEditor(this);
+    public previewZoom: import("lumaui/core").PreviewZoom = 1;
+    private readonly history = new EditHistory<DraftSnapshot>(sameDraft);
+    private savedState?: DraftSnapshot;
+    private Snapshot(): DraftSnapshot {
+        return cloneData({ nodes: this.nodes, sources: this.sources, dependencies: this.dependencies, nextId: this.nextId,
+            documentId: this.documentId, documentName: this.documentName, owner: this.owner, activationMode: this.activationMode,
+            collectionClass: this.collectionClass, collectionCondition: this.collectionCondition, nativeLayout: this.nativeLayout,
+            layoutPositions: this.layoutPositions, selected: this.selected });
+    }
+    public get HasUnsavedChanges(): boolean { return this.dirty || this.propertyEditor.HasChanges || this.sourceEditor.HasChanges || this.renaming && (this.renameInput?.() ?? this.renameValue).trim() !== this.documentName; }
+    private get PendingRename(): boolean { return this.renaming && (this.renameInput?.() ?? this.renameValue).trim() !== this.documentName; }
+    public get CanUndo(): boolean { return this.history.CanUndo || this.propertyEditor.HasChanges || this.sourceEditor.HasChanges || this.PendingRename; }
+    public get CanRedo(): boolean { return this.history.CanRedo && !this.propertyEditor.HasChanges && !this.sourceEditor.HasChanges && !this.PendingRename; }
+    public Suspend(): void { this.propertyEditor.Flush(); this.sourceEditor.Flush(); if (this.renaming && this.renameInput !== undefined) this.renameValue = this.renameInput(); }
+    private StageEdits(): boolean {
+        if (this.renaming && !this.Rename()) return false;
+        if (this.sourceEditor.HasChanges && !this.sourceEditor.SaveAll()) return false;
+        this.propertyEditor.Ensure();
+        return !this.propertyEditor.HasChanges || this.propertyEditor.Save();
+    }
+    private RestoreSnapshot(snapshot: DraftSnapshot): void {
+        const source = this.sourceEditor.original;
+        Object.assign(this, cloneData(snapshot));
+        this.renaming = false; this.renameInput = undefined; this.propertyEditor.Open(); this.sourceEditor.Reset();
+        if (this.inspector === "sources") this.sourceEditor.Open(this.sources.find(item => item.name === source)?.name ?? this.sources[0]?.name);
+        this.Reveal(this.selected); this.ScrollToSelection();
+        this.dirty = this.savedState === undefined || !sameDraft(this.Snapshot(), this.savedState);
+        Core.RefreshCustomization();
+    }
+    public Undo(): void {
+        if (InCombatLockdown() || !this.StageEdits()) return;
+        const snapshot = this.history.Undo(); if (snapshot === undefined) return;
+        this.RestoreSnapshot(snapshot); this.message = "Change undone. Redo restores it.";
+    }
+    public Redo(): void {
+        if (InCombatLockdown() || !this.CanRedo) return;
+        const snapshot = this.history.Redo(); if (snapshot === undefined) return;
+        this.RestoreSnapshot(snapshot); this.message = "Change redone.";
+    }
     public SetInspector(tab: "properties" | "sources" | "collection"): void {
         this.sourceEditor.Flush(); this.propertyEditor.Flush(); this.inspector = tab;
-        if (tab === "sources") this.sourceEditor.Open(this.Selected.source ?? this.sources[0]?.name);
+        if (tab === "sources" && !this.sourceEditor.HasChanges) this.sourceEditor.Open(this.Selected.source ?? this.sources[0]?.name);
         else Core.RefreshCustomization();
     }
-    public UpdateProperties(props: Properties, bindingPath?: string, items?: string): void {
-        const node = this.Selected; const oldProps = node.props, oldPath = node.sourcePath, oldSource = node.source, oldItems = node.items; node.props = props;
+    public UpdateProperties(props: Properties, bindingPath?: string, items?: string, bindings?: PresetNode["bindings"]): void {
+        const node = this.Selected; const oldProps = node.props, oldPath = node.sourcePath, oldSource = node.source, oldItems = node.items, oldBindings = node.bindings; node.props = props;
+        if (bindings !== undefined) node.bindings = Object.keys(bindings).length === 0 ? undefined : bindings;
         if (bindingPath !== undefined && node.source !== undefined) { if (bindingPath.trim() === "") delete node.sourcePath; else node.sourcePath = bindingPath.trim(); }
         if (items !== undefined && node.kind === "foreach") { node.items = items.trim(); delete node.source; delete node.sourcePath; }
         try { const preview = Core.Presets.Preview(this.Document()); preview.Dispose(); }
-        catch (failure) { node.props = oldProps; node.sourcePath = oldPath; node.source = oldSource; node.items = oldItems; throw failure; }
+        catch (failure) { node.props = oldProps; node.sourcePath = oldPath; node.source = oldSource; node.items = oldItems; node.bindings = oldBindings; throw failure; }
         if (typeof props.width === "number") node.width = props.width;
         if (typeof props.height === "number") node.height = props.height;
         if (props.direction === "horizontal" || props.direction === "vertical") node.direction = props.direction;
@@ -114,6 +161,17 @@ export class EditorDraft {
         catch (failure) { this.nodes = previousNodes; this.nextId = previousId; if (previousItems === undefined) delete node.items; else node.items = previousItems; if (previous === undefined) delete node[field]; else node[field] = previous; node.props = oldProps; if (previousPath === undefined) delete node.sourcePath; else node.sourcePath = previousPath; this.Report(String(failure)); return; }
         this.Changed("Source binding updated.");
     }
+    public BindProperty(target: string, source?: string, path?: string): void {
+        this.propertyEditor.Flush(); this.sourceEditor.Flush();
+        const node = this.Selected, previous = node.bindings, previousAlpha = node.alphaSource;
+        if (target === "alpha") delete node.alphaSource;
+        const next = { ...previous };
+        if (source === undefined) delete next[target]; else next[target] = { source, ...(path?.trim() ? { path: path.trim() } : {}) };
+        node.bindings = Object.keys(next).length === 0 ? undefined : next;
+        try { const preview = Core.Presets.Preview(this.Document()); preview.Dispose(); }
+        catch (failure) { node.bindings = previous; node.alphaSource = previousAlpha; this.Report(String(failure)); return; }
+        this.Changed("Property source updated. Save to update the mounted component.");
+    }
     public BindItems(expression: string): void {
         const node = this.Selected; if (node.kind !== "foreach") return;
         const previous = { items: node.items, source: node.source, sourcePath: node.sourcePath };
@@ -138,11 +196,12 @@ export class EditorDraft {
     public SetWorkspace(view: EditorDraft["workspaceView"]): void { this.propertyEditor.Flush(); this.sourceEditor.Flush(); this.workspaceView = view; Core.RefreshCustomization(); }
     public SetToolbox(group: string): void { this.propertyEditor.Flush(); this.sourceEditor.Flush(); this.toolbox = group; Core.RefreshCustomization(); }
     public CanContain(node: EditorNode): boolean {
+        if (node.kind === "blizzardElement") return node.props?.replace === true;
         return Core.Presets.ComponentChildren(node.kind === "action" ? "secureButton" : node.kind) !== "none";
     }
     private ChildError(parent: EditorNode, visual: boolean, exclude?: string): string | undefined {
         const children = this.Children(parent.id).filter(child => child.id !== exclude);
-        if (parent.kind === "foreach" && children.length >= 2) return "A repeated list has one member template and an optional pet template. Add elements inside a template.";
+        if (parent.kind === "foreach" && children.length >= 2) return "A repeated list accepts up to two item templates. Add elements inside a template.";
         const count = Core.Presets.ComponentChildren(parent.kind === "action" ? "secureButton" : parent.kind);
         if (count === "single" && visual && children.some(child => this.IsVisual(child))) return "This element accepts one child. Use a layout.";
         return undefined;
@@ -150,13 +209,14 @@ export class EditorDraft {
     private InMemberTemplate(node: EditorNode): boolean {
         let parent = this.nodes.find(item => item.id === node.parent);
         while (parent !== undefined) {
+            if (parent.kind === "blizzardElement") return true;
             if (parent.kind === "foreach") return this.sources.find(source => source.name === parent!.source)?.type === "groupMembers";
             parent = this.nodes.find(item => item.id === parent!.parent);
         }
         return false;
     }
     private ListTemplate(parent: string, id: string): EditorNode {
-        return { id, parent, kind: "cell", name: "Member template", width: 180, height: 72, direction: "vertical",
+        return { id, parent, kind: "cell", name: "Item template", width: 180, height: 72, direction: "vertical",
             props: { width: 180, height: 72, backgroundColor: { ...Core.Theme.colors.surface }, borderColor: { ...Core.Theme.colors.border }, borderWidth: 1 } };
     }
     public DropError(id: string, targetId: string, position: "before" | "inside" | "after"): string | undefined {
@@ -192,7 +252,7 @@ export class EditorDraft {
     public constructor() {
         // Store.get returns detached data; narrow the recursive schema before editing it.
         const saved = Core.Store.get(EditorSettings) as unknown as EditorSettings;
-        this.nodes = saved.nodes.map(node => ({ ...node }));
+        this.nodes = saved.nodes.map(node => node.kind === "hideActionBars" ? { ...node, kind: "hideUnitFrame", props: { ...node.props, unit: "actionBars" } } : { ...node });
         this.nextId = saved.nextId;
         this.documentId = saved.documentId;
         this.documentName = saved.documentName;
@@ -203,7 +263,14 @@ export class EditorDraft {
         this.nativeLayout = saved.nativeLayout; this.layoutPositions = saved.layoutPositions;
         this.dependencies = saved.dependencies ?? [];
         this.sources = saved.sources.map(source => ({ ...source, props: { ...source.props } }));
+        if (this.nodes.some(node => node.props?.classBorder !== undefined || node.props?.classBackground !== undefined)) {
+            const normalized = this.Document(); this.sources = normalized.sources; this.dependencies = normalized.dependencies ?? [];
+            const byId = new Map<string, PresetNode>();
+            const visit = (node: PresetNode) => { byId.set(node.id, node); for (const child of node.children ?? []) visit(child); }; visit(normalized.root);
+            this.nodes = this.nodes.map(node => ({ ...node, props: byId.get(node.id)?.props ?? node.props, bindings: byId.get(node.id)?.bindings ?? node.bindings }));
+        }
         this.selected = this.nodes[0].id; this.ResetTree();
+        this.history.Reset(this.Snapshot()); this.savedState = this.Snapshot();
     }
 
     public get Selected(): EditorNode { return this.nodes.find(node => node.id === this.selected) ?? this.nodes[0]; }
@@ -264,18 +331,20 @@ export class EditorDraft {
     }
 
     public IsVisual(node: EditorNode): boolean {
-        if (["hideUnitFrame", "hideActionBars"].includes(node.kind)) return false;
+        if (["hideUnitFrame", "hideActionBars", "blizzardElement"].includes(node.kind)) return false;
         if (node.kind === "fragment") return this.Children(node.id).some(child => this.IsVisual(child));
         if (node.kind === "preset") {
             const doc = this.dependencies.find(doc => doc.id === node.preset) ?? Core.Presets.Get(node.preset!);
-            return doc !== undefined && !Core.Presets.IsHeadless({ ...doc, dependencies: this.Dependencies(doc.root) });
+            if (doc === undefined) return false;
+            try { return !Core.Presets.IsHeadless({ ...doc, dependencies: this.Dependencies(doc.root) }); } catch { return false; }
         }
         return true;
     }
     public Embed(id: string): void { this.Add("preset", id); }
     public ReplacePreset(id: string): void {
+        const oldInputs = this.Selected.sourceProps; this.Selected.sourceProps = undefined;
         const old = this.Selected.preset; this.Selected.preset = id;
-        try { this.Document(); this.Changed("Component reference updated."); } catch (failure) { this.Selected.preset = old; this.Report(String(failure)); }
+        try { this.Document(); this.Changed("Component reference updated."); } catch (failure) { this.Selected.preset = old; this.Selected.sourceProps = oldInputs; this.Report(String(failure)); }
     }
     public Add(kind: NodeKind, preset?: string): void {
         this.propertyEditor.Flush(); this.sourceEditor.Flush();
@@ -285,24 +354,29 @@ export class EditorDraft {
             if (ancestor === undefined) { this.Report("Select a container with room for another child."); return; }
             parent = ancestor;
         }
-        const visual = !["hideUnitFrame", "hideActionBars", "fragment"].includes(kind) && (kind !== "preset" || !Core.Presets.IsHeadless(Core.Presets.Get(preset!)!));
+        const visual = !["hideUnitFrame", "hideActionBars", "fragment", "blizzardElement"].includes(kind) && (kind !== "preset" || !Core.Presets.IsHeadless(Core.Presets.Get(preset!)!));
         const reason = this.ChildError(parent, visual);
         if (reason !== undefined) { this.Report(reason); return; }
         const previous = this.nodes.slice(), previousSources = this.sources.slice(), previousId = this.nextId;
         const next = () => { let id = "node-" + this.nextId++; while (this.nodes.some(node => node.id === id)) id = "node-" + this.nextId++; return id; };
         const id = next();
-        const unit = (parent.kind === "foreach" && this.sources.find(source => source.name === parent.source)?.type === "groupMembers") || this.InMemberTemplate(parent) ? "$unit" : "player";
+        const unit = parent.kind === "blizzardElement" || (parent.kind === "foreach" && this.sources.find(source => source.name === parent.source)?.type === "groupMembers") || this.InMemberTemplate(parent) ? "$unit" : "player";
         const defaults = elementDefaults(kind, unit);
         const name = kind === "preset" ? "Component: " + (Core.Presets.Get(preset!)?.name ?? preset) : elementLabel(kind);
         const node: EditorNode = { id, parent: parent.id, kind, name, ...defaults, direction: "vertical", preset };
         this.nodes.push(node);
+        if (kind === "blizzardElement") {
+            let filter = "nameplateFilter", suffix = 1;
+            while (this.sources.some(source => source.name === filter)) filter = "nameplateFilter-" + suffix++;
+            this.sources.push({ name: filter, type: "unitToBool", props: {} });
+            node.props!.filter = filter;
+            this.nodes.push({ id: next(), parent: id, kind: "cell", name: "Nameplate template",
+                ...elementDefaults("cell", "$unit"), direction: "vertical" });
+        }
         if (kind === "foreach") {
-            let source = this.sources.find(source => source.type === "groupMembers");
-            if (source === undefined) {
-                let name = "members", n = 1; while (this.sources.some(source => source.name === name)) name = "members-" + n++;
-                source = { name, type: "groupMembers", props: { scope: "auto" } }; this.sources.push(source);
-            }
-            node.source = source.name; this.nodes.push(this.ListTemplate(id, next()));
+            let name = "items", n = 1; while (this.sources.some(source => source.name === name)) name = "items-" + n++;
+            this.sources.push({ name, type: "list", props: { items: [] } });
+            node.source = name; this.nodes.push(this.ListTemplate(id, next()));
         }
         try { this.Document(); }
         catch (failure) { this.nodes = previous; this.sources = previousSources; this.nextId = previousId; this.Report(String(failure)); return; }
@@ -315,8 +389,8 @@ export class EditorDraft {
         const node = this.Selected;
         if (node === this.nodes[0]) { this.message = "The root layout stays in the draft."; Core.RefreshCustomization(); return; }
         const parent = this.nodes.find(item => item.id === node.parent);
-        if (parent?.kind === "foreach" && this.Children(parent.id).length === 1) {
-            this.Report("Keep one member template in the repeated list. Edit its contents or delete the list instead."); return;
+        if ((parent?.kind === "foreach" || parent?.kind === "blizzardElement" && parent.props?.replace === true) && this.Children(parent.id).length === 1) {
+            this.Report("Keep one item template in the repeated list. Edit its contents or delete the list instead."); return;
         }
         const removed = new Set<string>([node.id]);
         let changed = true;
@@ -332,6 +406,29 @@ export class EditorDraft {
         this.Changed("Element removed.");
     }
 
+    public SetBlizzardMode(replace: boolean): void {
+        const node = this.Selected;
+        if (node.kind !== "blizzardElement" || node.props?.replace === replace) return;
+        this.propertyEditor.Ensure();
+        if (!this.propertyEditor.Save()) return;
+        const previous = this.nodes.slice(), props = node.props, nextId = this.nextId;
+        node.props = { ...props, replace, apply: !replace };
+        if (replace) {
+            for (const key of ["width", "height", "scale", "alpha", "healthColor", "castColor"]) delete node.props[key];
+            let id = "node-" + this.nextId++; while (this.nodes.some(item => item.id === id)) id = "node-" + this.nextId++;
+            this.nodes.push({ id, parent: node.id, kind: "cell", name: "Nameplate template", ...elementDefaults("cell", "$unit"), direction: "vertical" });
+        } else {
+            const removed = new Set<string>();
+            let changed = true;
+            while (changed) { changed = false; for (const item of this.nodes) if ((item.parent === node.id || removed.has(item.parent)) && !removed.has(item.id)) { removed.add(item.id); changed = true; } }
+            this.nodes = this.nodes.filter(item => !removed.has(item.id));
+        }
+        try { this.Document(); }
+        catch (failure) { node.props = props; this.nodes = previous; this.nextId = nextId; this.Report(String(failure)); return; }
+        this.propertyEditor.nodeId = "";
+        this.Changed("Native element mode updated. Undo restores the previous template.");
+    }
+
     public Resize(axis: "width" | "height", amount: number): void {
         this.Selected[axis] = Math.max(16, Math.min(axis === "width" ? 800 : 600, this.Selected[axis] + amount));
         (this.Selected.props ??= {})[axis] = this.Selected[axis];
@@ -343,7 +440,11 @@ export class EditorDraft {
         (node.props ??= {}).direction = node.direction;
         this.Changed("Flow direction updated.");
     }
-    private Changed(message: string): void { this.Reveal(this.selected); this.dirty = true; this.message = message; Core.RefreshCustomization(); }
+    private Changed(message: string): void {
+        this.Reveal(this.selected); this.history.Record(this.Snapshot());
+        this.dirty = this.savedState === undefined || !sameDraft(this.Snapshot(), this.savedState);
+        this.message = message; Core.RefreshCustomization();
+    }
 
     public Save(): void {
         Core.Store.set(EditorSettings, settings => {
@@ -360,34 +461,20 @@ export class EditorDraft {
             settings.sources = this.sources.map(source => ({ ...source, props: { ...source.props } }));
             return settings;
         });
-        this.dirty = false;
+        this.history.Record(this.Snapshot()); this.savedState = this.Snapshot(); this.dirty = false;
         this.message = "Draft saved for this character.";
         Core.RefreshCustomization();
     }
-    public New(headless = false, scope?: "party" | "raid" | "spells"): void {
+    public New(): void {
         let index = 1;
-        while (Core.Presets.Get("collection-" + index) !== undefined) index++;
-        this.documentId = "collection-" + index; this.documentName = "Component " + index; this.owner = undefined;
+        while (Core.Presets.Identity("Component " + index).duplicate) index++;
+        const identity = Core.Presets.Identity("Component " + index); this.documentId = identity.id; this.documentName = identity.name; this.owner = undefined;
         this.activationMode = "condMet"; this.collectionClass = ""; this.collectionCondition = ""; this.nativeLayout = ""; this.layoutPositions = undefined;
         this.inspector = "properties"; this.propertyEditor.nodeId = "";
-        this.nodes = [headless ? { ...rootNode(), kind: "fragment", name: "Headless group", props: {} } : rootNode()]; this.sources = []; this.dependencies = []; this.nextId = 1; this.selected = "root"; this.treeScroll = 0;
-        if (scope !== undefined && scope !== "spells") {
-            this.documentName = scope === "party" ? "Party frames " + index : "Raid frames " + index;
-            this.collectionCondition = scope === "party" ? "inParty" : "inRaid";
-            this.sources = [{ name: "members", type: "groupMembers", props: { scope } }];
-            this.nodes = [{ id: "root", parent: "", kind: "foreach", name: "Members", ...elementDefaults("foreach", "player"),
-                direction: "vertical", source: "members" }, this.ListTemplate("root", "member")];
-            if (scope === "raid") this.nodes[0].props!.groupBy = "group";
-        }
-        if (scope === "spells") {
-            this.documentName = "Spell buttons " + index;
-            this.nodes = [{ id: "root", parent: "", kind: "foreach", name: "Known spells", width: 0, height: 0, direction: "horizontal", items: "KnownSpells()",
-                props: { width: 0, height: 0, direction: "horizontal", wrapAfter: 8, gap: 4, lineGap: 4 } },
-                { id: "spell", parent: "root", kind: "action", name: "Spell button template", width: 24, height: 24, direction: "vertical", source: "item", props: { width: 24, height: 24, finishGlow: true } },
-                { id: "icon", parent: "spell", kind: "icon", name: "Spell icon", width: 24, height: 24, direction: "vertical", source: "item", props: { width: "inherit", height: "inherit" } }];
-        }
-        this.ResetTree(); this.sourceEditor.Reset(); this.renaming = false; this.renameInput = undefined;
-        this.Changed(scope === undefined ? "New component draft. Save to save and mount it." : scope === "spells" ? "Edit one button template. KnownSpells filters the list; item supplies each spell, icon and cooldown." : "Edit the member template. The list repeats it for each unit; use $unit in sources and unit fields.");
+        this.nodes = [{ ...rootNode(), kind: "fragment", name: "Component", width: 0, height: 0, props: {} }]; this.sources = []; this.dependencies = []; this.nextId = 1; this.selected = "root"; this.treeScroll = 0;
+        this.identityPrompt = undefined; this.ResetTree(); this.sourceEditor.Reset(); this.renaming = false; this.renameInput = undefined;
+        this.history.Reset(this.Snapshot()); this.savedState = undefined;
+        this.Changed("New component draft. Add elements and sources, then Save to mount it.");
     }
     public Document(): PresetDocument {
         const build = (node: EditorNode): PresetNode => {
@@ -400,7 +487,7 @@ export class EditorDraft {
             if (node.id === this.nodes[0].id && !["fragment", "preset", "hideUnitFrame", "hideActionBars"].includes(kind) && props.mode === undefined) {
                 props.mode = "absolute"; props.anchor = "CENTER"; props.relativeAnchor = "CENTER"; props.x = 0; props.y = 0;
             }
-            return { id: node.id, type: kind, props, ...(node.preset === undefined ? {} : { preset: node.preset }), ...(node.source === undefined ? {} : { source: node.source }),
+            return { id: node.id, type: kind, props, ...(node.activation === undefined ? {} : { activation: node.activation }), ...(node.sourceProps === undefined ? {} : { sourceProps: node.sourceProps }), ...(node.bindings === undefined ? {} : { bindings: node.bindings }), ...(node.preset === undefined ? {} : { preset: node.preset }), ...(node.source === undefined ? {} : { source: node.source }),
                 ...(node.items === undefined ? {} : { items: node.items }),
                 ...(node.sourcePath === undefined ? {} : { sourcePath: node.sourcePath }),
                 ...(node.visibleSource === undefined ? {} : { visibleSource: node.visibleSource }),
@@ -412,7 +499,7 @@ export class EditorDraft {
             enabled: this.activationMode, ...(this.collectionClass === "" ? {} : { class: this.collectionClass }),
             ...(this.collectionCondition === "" ? {} : { condition: this.collectionCondition }), ...(this.owner === undefined ? {} : { owner: this.owner }),
             ...(this.nativeLayout === "" ? {} : { layout: this.nativeLayout }), ...(this.layoutPositions === undefined ? {} : { layoutPositions: this.layoutPositions }),
-            sources: this.sources, root: build(this.nodes[0]), ...(this.dependencies.length === 0 ? {} : { dependencies: this.Dependencies() }) });
+            sources: this.sources, root: build(this.nodes[0]), ...(this.dependencies.length === 0 ? {} : { dependencies: this.Dependencies() }) }, true);
     }
     private Dependencies(root?: PresetNode): PresetDocument[] {
         const found = new Map<string, PresetDocument>();
@@ -433,13 +520,13 @@ export class EditorDraft {
         this.Load(document);
     }
     public Load(input: PresetDocument): void {
-        const document = Core.Presets.Validate(input);
+        const document = Core.Presets.Validate(input, true);
         const nodes: EditorNode[] = [];
         const visit = (node: PresetNode, parent: string) => {
             nodes.push({ id: node.id, parent, kind: node.type === "secureButton" ? "action" : node.type, name: node.type + " " + node.id,
-                width: typeof node.props.width === "number" ? node.props.width : 140,
+                activation: node.activation, sourceProps: node.sourceProps, width: typeof node.props.width === "number" ? node.props.width : 140,
                 height: typeof node.props.height === "number" ? node.props.height : 32,
-                direction: node.props.direction === "horizontal" ? "horizontal" : "vertical", props: node.props, source: node.source, items: node.items, sourcePath: node.sourcePath, visibleSource: node.visibleSource, textSource: node.textSource, alphaSource: node.alphaSource, preset: node.preset });
+                direction: node.props.direction === "horizontal" ? "horizontal" : "vertical", props: node.props, bindings: node.bindings, source: node.source, items: node.items, sourcePath: node.sourcePath, visibleSource: node.visibleSource, textSource: node.textSource, alphaSource: node.alphaSource, preset: node.preset });
             for (const child of node.children ?? []) visit(child, node.id);
         };
         visit(document.root, "");
@@ -448,7 +535,10 @@ export class EditorDraft {
         this.activationMode = document.enabled ?? "condMet"; this.collectionClass = document.class ?? ""; this.collectionCondition = document.condition ?? "";
         this.nativeLayout = document.layout ?? ""; this.layoutPositions = document.layoutPositions;
         this.selected = nodes[0].id; this.treeScroll = 0; this.nextId = 1; this.propertyEditor.nodeId = "";
-        this.ResetTree(); this.sourceEditor.Reset(); this.renaming = false; this.renameInput = undefined;
+        this.identityPrompt = undefined; this.ResetTree(); this.sourceEditor.Reset(); this.renaming = false; this.renameInput = undefined;
+        this.history.Reset(this.Snapshot());
+        const saved = Core.Presets.Get(document.id);
+        this.savedState = saved !== undefined && equalData(Core.Presets.Validate(saved, true), document) ? this.Snapshot() : undefined;
         this.Changed("Component loaded into the draft. Save to update it in the game.");
     }
     public UseResource(type: "hp" | "mana" | undefined): void {
@@ -498,16 +588,44 @@ export class EditorDraft {
     }
     public Commit(): void {
         if (this.renaming && !this.Rename()) return;
-        if (this.sourceEditor.HasChanges && !this.sourceEditor.Save()) return;
+        if (this.sourceEditor.HasChanges && !this.sourceEditor.SaveAll()) return;
         this.propertyEditor.Ensure();
         if (this.propertyEditor.HasChanges && !this.propertyEditor.Save()) return;
-        this.Apply();
+        const saved = Core.Presets.Get(this.documentId);
+        if (saved !== undefined && saved.name === this.documentName) { this.Apply(); return; }
+        const identity = Core.Presets.Identity(this.documentName, saved?.id);
+        if (saved !== undefined || identity.duplicate) { this.identityPrompt = { ...identity, rename: saved !== undefined }; Core.RefreshCustomization(); return; }
+        this.documentId = identity.id; this.documentName = identity.name; this.Apply();
     }
+    public ConfirmIdentity(updateReferences: boolean): void {
+        const prompt = this.identityPrompt; if (prompt === undefined) return;
+        try {
+            const oldID = this.documentId;
+            const document = { ...this.Document(), id: prompt.id, name: prompt.name };
+            if (prompt.rename) Core.Presets.Rename(document, oldID, updateReferences);
+            this.documentId = prompt.id; this.documentName = prompt.name; this.identityPrompt = undefined;
+            this.Apply();
+        } catch (failure) { this.Report(String(failure)); }
+    }
+    public CancelIdentity(): void { this.identityPrompt = undefined; Core.RefreshCustomization(); }
     public Apply(): void {
         try { const document = this.Document(); Core.Presets.Apply(document); this.dependencies = []; this.Save();
             this.message = "Component saved · " + Core.Presets.ActivationStatus(this.documentId) + "."; }
         catch (failure) { this.message = String(failure); }
         Core.RefreshCustomization();
+    }
+    public SetReferenceActivation(key: string, value: string): void {
+        const node = this.Selected; if (node.kind !== "preset") return;
+        const activation = { ...node.activation } as Record<string, string>;
+        if (value === "$inherit") delete activation[key]; else activation[key] = value;
+        node.activation = activation as PresetNode["activation"];
+        this.Changed("Component instance activation updated. Save to apply.");
+    }
+    public SetReferenceSource(input: string, source?: string): void {
+        const node = this.Selected; if (node.kind !== "preset") return;
+        node.sourceProps = { ...node.sourceProps };
+        if (source === undefined || source === "") delete node.sourceProps[input]; else node.sourceProps[input] = source;
+        this.Changed("Component source input updated. Save to apply.");
     }
     public Export(): void { try { Core.OpenExport(this.Document()); } catch (failure) { this.message = String(failure); Core.RefreshCustomization(); } }
     public Import(): void { Core.OpenImport("preset", document => { if (document.kind === "preset") this.Load(document); }); }

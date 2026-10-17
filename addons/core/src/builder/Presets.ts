@@ -10,18 +10,28 @@ import { Library, BuilderSettings, afterCombat, disposeAll } from "./Library";
 import { array, copy, fail, identifier, keys, properties, record, text } from "./validate";
 import { applyLayoutPosition } from "./LayoutPosition";
 import { ActivationContext, validateActivation } from "./Activation";
-import { CollectionBindings, stripBindings } from "./CollectionBindings";
+import { CollectionBindings, CollectionBindingSettings, stripBindings } from "./CollectionBindings";
 import type { ClickCastLibrary } from "./ClickCastLibrary";
 import { validateAssignments } from "./BindingTransfer";
 import { petUnit } from "./GroupRoster";
+function typeNotPreset(node: Record<string, unknown>): boolean { return node.type !== "preset"; }
+function referenceDocument(document: PresetDocument, node: PresetNode): PresetDocument {
+    const result = { ...document, ...node.activation } as PresetDocument;
+    for (const field of ["class", "condition", "layout"] as const) if ((result as unknown as Record<string, unknown>)[field] === "") delete result[field];
+    return result;
+}
 /** Old saved action components now use the core factories and need no addon owner. */
 function releaseRetiredOwner(document: { owner?: unknown }): boolean {
     if (document.owner !== "LumaUI_ActionBars") return false;
     delete document.owner;
     return true;
 }
-interface UnitScope { unit: UnitSource; pet: UnitSource; }
+interface UnitScope { unit: UnitSource; pet?: UnitSource; }
 interface ItemScope { value: object; bind?: () => SourceInstance; }
+import { preparePropertyBindings, propertyBindingTargets } from "./PropertyBindings";
+import { migrateClassColors } from "./ClassColorMigration";
+import { migrateNativeVisibility } from "./NativeVisibilityMigration";
+import { validateValuePath } from "./ConverterSources";
 import { ListHelpers } from "./ListHelpers";
 import { ObservableItems } from "./ObservableItems";
 
@@ -102,7 +112,7 @@ export class Presets extends Library<PresetDocument> implements PresetAPI {
         return copy(definition.properties) as unknown as PropertyRules;
     }
     /** Dependencies travel in the envelope, but are stored as independent library entries. */
-    public Validate(input: unknown): PresetDocument {
+    public Validate(input: unknown, allowMissing = false, libraryOverride?: PresetDocument[]): PresetDocument {
         const data = record(copy(input));
         const available = new Map<string, PresetDocument>();
         const collect = (value: unknown, depth: number) => {
@@ -113,35 +123,49 @@ export class Presets extends Library<PresetDocument> implements PresetAPI {
             if (doc.kind !== "preset" || doc.version !== 1) fail("unsupported component version or kind");
             const id = identifier(doc.id); text(doc.name, "component name"); if (doc.owner !== undefined) identifier(doc.owner);
             releaseRetiredOwner(doc);
+            array(doc.sources, 128); migrateClassColors(doc as unknown as PresetDocument); migrateNativeVisibility(doc as unknown as PresetDocument);
             if (available.has(id)) fail("duplicate component dependency: " + id);
             available.set(id, doc as unknown as PresetDocument);
             for (const dependency of doc.dependencies === undefined ? [] : array(doc.dependencies, 64)) collect(dependency, depth + 1);
             delete doc.dependencies;
         };
         collect(data, 0);
-        const local = new Map(this.List().map(doc => [doc.id, doc]));
+        const local = new Map((libraryOverride ?? this.List()).map(doc => [doc.id, doc]));
         const stack = new Set<string>(); const dependencies = new Map<string, PresetDocument>();
         let nodeCount = 0, sourceCount = 0;
-        const validate = (doc: PresetDocument, depth: number): number => {
+        const validate = (doc: PresetDocument, depth: number, dynamic = false): number => {
             if (depth > 16 || stack.has(doc.id)) fail("cyclic component dependency: " + doc.id);
             stack.add(doc.id);
             const names = new Set<string>();
             for (const entry of array(doc.sources, 128)) {
                 if (++sourceCount > 512) fail("too many composed sources");
-                const spec = record(entry); keys(spec, ["name", "type", "props"]);
+                const spec = record(entry); keys(spec, ["name", "type", "props", "isProp", "optional"]);
+                for (const field of ["isProp", "optional"]) if (spec[field] !== undefined && typeof spec[field] !== "boolean") fail("invalid source input flag");
+                if (spec.optional === true && spec.isProp !== true) fail("only exposed source inputs can be optional");
                 const name = identifier(spec.name), type = identifier(spec.type);
                 if (name === "item") fail("item is reserved for the current ForEach item");
                 if (names.has(name)) fail("duplicate source: " + name); names.add(name);
                 const source = this.sources.get(type); if (source === undefined) fail("source addon is unavailable: " + type);
-                properties(spec.props, source.properties); source.Validate?.(spec.props as Properties);
+                if (spec.isProp === true) { properties(spec.props, {}); } else { properties(spec.props, source.properties); source.Validate?.(spec.props as Properties); }
             }
-            for (const entry of doc.sources) for (const field of this.sources.get(entry.type)!.references ?? [])
+            for (const entry of doc.sources.filter(spec => !spec.isProp)) for (const field of this.sources.get(entry.type)!.references ?? [])
                 if (!names.has(identifier(entry.props[field]))) fail("missing source dependency");
+            const specsByName = new Map(doc.sources.map(spec => [spec.name, spec]));
+            const visitingSources = new Set<string>(), visitedSources = new Set<string>();
+            const visitSource = (name: string) => {
+                if (visitingSources.has(name)) fail("cyclic source dependency: " + name);
+                if (visitedSources.has(name)) return;
+                visitingSources.add(name); const spec = specsByName.get(name)!;
+                if (!spec.isProp) for (const key of this.sources.get(spec.type)!.references ?? []) visitSource(spec.props[key] as string);
+                visitingSources.delete(name); visitedSources.add(name);
+            };
+            for (const name of names) visitSource(name);
             const ids = new Set<string>(); const drawable = new Set<string>();
-            const visit = (inputNode: unknown, level: number, insideGroup = false): number => {
+            const visit = (inputNode: unknown, level: number, insideGroup = false, insideDynamic = dynamic): number => {
                 if (level > 32 || ++nodeCount > 256) fail("component tree is too large");
                 const node = record(inputNode);
-                keys(node, ["id", "type", "props", "source", "sourcePath", "visibleSource", "textSource", "alphaSource", "children", "preset", "items"]);
+                keys(node, ["id", "type", "props", "source", "sourcePath", "visibleSource", "textSource", "alphaSource", "children", "preset", "items", "bindings", "activation", "sourceProps"]);
+                if (typeNotPreset(node) && (node.activation !== undefined || node.sourceProps !== undefined)) fail("only component references accept activation and source inputs");
                 const id = identifier(node.id); if (ids.has(id)) fail("duplicate node ID: " + id); ids.add(id);
                 const type = identifier(node.type);
                 if (insideGroup && type === "preset") fail("edit component references outside the repeated unit template");
@@ -149,23 +173,40 @@ export class Presets extends Library<PresetDocument> implements PresetAPI {
                 if (node.items !== undefined) { if (type !== "foreach") fail("only ForEach accepts an items expression"); this.ParseItems(text(node.items, "items expression", 4096)); }
                 if (type === "preset" || type === "fragment") {
                     properties(node.props, type === "preset" ? this.ComponentProperties("cell") : {});
+                    if (node.bindings !== undefined) fail("bind properties inside the referenced component");
                     for (const field of ["source", "sourcePath", "visibleSource", "textSource", "alphaSource"])
                         if (node[field] !== undefined) fail("bind sources inside the referenced component");
                     if (type === "fragment") {
                         if (node.preset !== undefined) fail("only component nodes accept a component reference");
-                        let total = 0; for (const child of children) total += visit(child, level + 1, insideGroup); return total;
+                        let total = 0; for (const child of children) total += visit(child, level + 1, insideGroup, insideDynamic); return total;
                     }
                     if (children.length > 0) fail("edit children in the referenced component");
                     const dependencyId = identifier(node.preset);
                     const dependency = available.get(dependencyId) ?? local.get(dependencyId);
-                    if (dependency === undefined) fail("missing component dependency: " + dependencyId);
+                    if (dependency === undefined) { if (allowMissing) { drawable.add(id); return 1; } fail("missing component dependency: " + dependencyId); }
+                    if (node.activation !== undefined) { const override = record(node.activation); keys(override, ["enabled", "class", "condition", "layout"]); validateActivation(referenceDocument(dependency, node as unknown as PresetNode) as unknown as Record<string, unknown>); }
+                    if (node.sourceProps !== undefined) for (const [input, parentSource] of Object.entries(record(node.sourceProps))) {
+                        const target = dependency.sources.find(spec => spec.name === input && spec.isProp);
+                        if (target === undefined) fail("component does not expose source: " + input);
+                        const supplied = specsByName.get(identifier(parentSource));
+                        if (supplied === undefined || supplied.type !== target.type) fail("source input type mismatch: " + input);
+                    }
                     dependencies.set(dependencyId, dependency);
-                    const count = validate(dependency, depth + 1); if (count > 0) drawable.add(id); return count;
+                    const count = validate(dependency, depth + 1, insideDynamic); if (count > 0) drawable.add(id); return count;
                 }
                 if (node.preset !== undefined) fail("only component nodes accept a component reference");
                 const component = this.components.get(type);
                 if (component === undefined) fail("component addon is unavailable: " + type);
                 properties(node.props, component.properties);
+                component.Validate?.(node.props as Properties);
+                if (insideDynamic && (type === "secureButton" || component.headless === true)) fail("dynamic nameplate templates cannot contain secure controls or headless effects");
+                const deferred = component.headless === true && component.deferred === true;
+                if (deferred) {
+                    if (insideGroup) fail("register dynamic nameplate rules outside repeated item templates");
+                    const filter = (node.props as Properties).filter;
+                    if (typeof filter !== "string" || !names.has(filter)) fail("BlizzardElement filter requires a named unit converter source");
+                    if ((node.props as Properties).replace === true ? children.length !== 1 : children.length !== 0) fail("Replace needs one visual template; Apply has no replacement children");
+                }
                 if (type === "unitAuras") for (const key of ["maxIcons", "iconSize"]) if (node.props !== undefined && (node.props as Properties)[key] !== undefined && !Number.isInteger((node.props as Properties)[key])) fail("aura slot sizes and counts must be integers");
                 if (type === "foreach" && (children.length < 1 || children.length > 2 || (node.source === undefined) === (node.items === undefined))) fail("ForEach requires one list source or helper expression and one item template (an optional second template is for pets)");
                 if (type === "foreach" && (node.props as Properties).wrapAfter !== undefined && !Number.isInteger((node.props as Properties).wrapAfter)) fail("ForEach wrapAfter must be an integer");
@@ -183,7 +224,19 @@ export class Presets extends Library<PresetDocument> implements PresetAPI {
                     if (node[field] !== undefined && (node[field] === "item" ? !insideGroup : !names.has(identifier(node[field])))) fail("missing binding source or ForEach item scope");
                 if (component.headless === true && ["visibleSource", "textSource", "alphaSource"].some(field => node[field] !== undefined))
                     fail("headless effects do not have visual bindings");
-                let total = 0; for (const child of children) total += visit(child, level + 1, insideGroup || type === "foreach");
+                if (node.bindings !== undefined) {
+                    if (component.headless === true) fail("headless effects cannot have property bindings");
+                    const bindings = record(node.bindings);
+                    for (const [target, input] of Object.entries(bindings)) {
+                        if (!propertyBindingTargets.includes(target as never) || component.properties[target] === undefined || target === "color" && type !== "progress") fail("unsupported property binding: " + target);
+                        const binding = record(input); keys(binding, ["source", "path"]);
+                        if (!names.has(identifier(binding.source))) fail("missing property binding source");
+                        if (binding.path !== undefined) validateValuePath(text(binding.path, "binding path", 128));
+                    }
+                }
+
+                let total = 0; for (const child of children) total += visit(child, level + 1, insideGroup || type === "foreach", insideDynamic || deferred);
+                if (deferred && (node.props as Properties).replace === true && total !== 1) fail("Replace needs one visual template");
                 if ((component.children === "none" && children.length > 0) || (component.children === "single" && total > 1)) fail("invalid child count for " + type);
                 if (component.headless === true) return 0;
                 drawable.add(id); return 1;
@@ -223,6 +276,50 @@ export class Presets extends Library<PresetDocument> implements PresetAPI {
             if (existing !== undefined && !equal(existing, dependency)) fail("dependency already exists with different settings: " + dependency.name + ". Edit it in the library first.");
         }
     }
+    public Identity(input: string, excludeID?: string): { id: string; name: string; duplicate: boolean } {
+        const original = text(input.trim(), "component name", 96);
+        const slug = (value: string): string => {
+            let result = "";
+            for (let i = 0; i < value.length; i++) { const char = value[i].toLowerCase(); result += "abcdefghijklmnopqrstuvwxyz0123456789".includes(char) ? char : char === " " || char === "-" || char === "_" || char === "(" || char === ")" ? "-" : "u" + value.charCodeAt(i).toString(16); }
+            const valueID = result.split("-").filter(part => part !== "").join("-").slice(0, 80); return valueID === "" ? "component" : valueID;
+        };
+        const documents = this.List().filter(doc => doc.id !== excludeID);
+        let name = original, id = slug(name), index = 0;
+        while (documents.some(doc => doc.id === id || doc.name.toLowerCase() === name.toLowerCase())) {
+            index++; name = original.slice(0, 80) + " (" + index + ")"; id = slug(original) + "-" + index;
+        }
+        return { id, name, duplicate: index > 0 };
+    }
+    public Rename(input: PresetDocument, oldID: string, updateReferences: boolean): void {
+        if (InCombatLockdown()) fail("rename after combat");
+        const existing = this.Get(oldID); if (existing === undefined) fail("component to rename was not found");
+        const identity = this.Identity(input.name, oldID);
+        if (identity.name !== input.name || input.id !== oldID && this.Get(input.id) !== undefined) fail("component name changed or already exists; confirm its new name again");
+        const data = this.Validate(input);
+        this.CheckDependencies(data); stripBindings(data);
+        const documents = this.List().filter(doc => doc.id !== oldID);
+        for (const dependency of data.dependencies ?? []) if (!documents.some(doc => doc.id === dependency.id)) documents.push(dependency);
+        const affected = this.UsedBy(oldID).map(doc => doc.id);
+        const rewrite = (node: PresetNode): void => { if (node.preset === oldID) node.preset = data.id; for (const child of node.children ?? []) rewrite(child); };
+        if (updateReferences) for (const doc of documents) rewrite(doc.root);
+        documents.push(data);
+        // Retire affected mounted trees before replacing the library in one store update.
+        const queue = [...affected]; const stopped = new Set<string>();
+        for (let i = 0; i < queue.length; i++) { const id = queue[i]; if (stopped.has(id)) continue; stopped.add(id); queue.push(...this.UsedBy(id).map(doc => doc.id)); }
+        for (const doc of documents) if (doc.id === data.id || stopped.has(doc.id) || (data.dependencies ?? []).some(dependency => dependency.id === doc.id)) this.Validate(doc, true, documents);
+        for (const id of stopped) this.ReleaseActive(id);
+        this.ReleaseActive(oldID); this.paused.delete(oldID);
+        this.store.set(BuilderSettings, settings => {
+            settings.documents = [...settings.documents.filter(doc => doc.kind !== "preset"), ...documents.map(doc => { const { dependencies, ...stored } = doc; return stored; })];
+            settings.enabled = settings.enabled.map(key => key === "preset:" + oldID ? "preset:" + data.id : key);
+            return settings;
+        });
+        this.store.set(CollectionBindingSettings, settings => {
+            if (oldID !== data.id && settings.collections[oldID] !== undefined) { settings.collections[data.id] = settings.collections[oldID]; delete settings.collections[oldID]; }
+            return settings;
+        });
+        if (this.started) this.Restore();
+    }
     public Save(document: PresetDocument, enabled = false): void {
         this.MigrateSavedComponents();
         const data = this.Validate(document);
@@ -234,7 +331,7 @@ export class Presets extends Library<PresetDocument> implements PresetAPI {
             const graph = new Map<string, PresetDocument>();
             const visit = (node: PresetNode) => {
                 if (node.preset !== undefined && !graph.has(node.preset)) {
-                    const doc = override.get(node.preset); if (doc === undefined) fail("missing component dependency: " + node.preset);
+                    const doc = override.get(node.preset); if (doc === undefined) return;
                     graph.set(doc.id, doc); visit(doc.root);
                 }
                 for (const child of node.children ?? []) visit(child);
@@ -274,9 +371,9 @@ export class Presets extends Library<PresetDocument> implements PresetAPI {
     private MigrateSavedComponents(): void {
         const documents = this.List();
         this.bindings.Migrate(documents);
-        if (!documents.map(document => { const released = releaseRetiredOwner(document); return stripBindings(document) || released; }).some(changed => changed)) return;
+        if (!documents.map(document => { const released = releaseRetiredOwner(document); const colors = migrateClassColors(document), native = migrateNativeVisibility(document), bindings = stripBindings(document); return colors || native || bindings || released; }).some(changed => changed)) return;
         this.store.set(BuilderSettings, settings => {
-            for (const document of settings.documents) if (document.kind === "preset") { releaseRetiredOwner(document); stripBindings(document); }
+            for (const document of settings.documents) if (document.kind === "preset") { releaseRetiredOwner(document); migrateClassColors(document); migrateNativeVisibility(document); stripBindings(document); }
             return settings;
         });
     }
@@ -357,16 +454,17 @@ export class Presets extends Library<PresetDocument> implements PresetAPI {
             if (cell.child !== undefined) disableInput(cell.child);
             for (const child of cell.children ?? []) disableInput(child);
         };
-        const buildDocument = (document: PresetDocument, prefix: string, units?: UnitScope, ownedCleanups = cleanups, itemScope?: ItemScope): Cell[] => {
+        const buildDocument = (document: PresetDocument, prefix: string, units?: UnitScope, ownedCleanups = cleanups, itemScope?: ItemScope, borrowed?: (name: string) => SourceInstance | undefined): Cell[] => {
             if (!preview && !activation.Matches(document)) return [];
+            if (!preview && document.sources.some(spec => spec.isProp && !spec.optional && borrowed?.(spec.name) === undefined)) return [];
             activatedDocuments.add(document);
             if (!preview && prefix === "") applyLayoutPosition(document, activation.LayoutKey);
             const instances = new Map<string, SourceInstance>();
             const specs = new Map<string, SourceSpec>(document.sources.map(spec => [spec.name, spec]));
             const creating = new Set<string>(); const views = new Map<string, Cell>();
             const unit = (token: string): UnitInput => {
-                if (token === "$unit") { if (units === undefined) fail("$unit requires a ForEach member scope"); return units.unit; }
-                if (token === "$pet") { if (units === undefined) fail("$pet requires a ForEach member scope"); return units.pet; }
+                if (token === "$unit") { if (units === undefined) fail("$unit requires a repeated unit or nameplate scope"); return units.unit; }
+                if (token === "$pet") { if (units?.pet === undefined) fail("$pet requires a ForEach pet scope"); return units.pet; }
                 return token;
             };
             const source = (name: string): SourceInstance => {
@@ -376,6 +474,7 @@ export class Presets extends Library<PresetDocument> implements PresetAPI {
                     const bound = itemScope.bind(); instances.set(name, bound); if (bound.Dispose !== undefined) ownedCleanups.push(() => bound.Dispose!()); return bound;
                 }
                 const spec = specs.get(name); if (spec === undefined) fail("missing source: " + name);
+                if (spec.isProp) { const supplied = borrowed?.(name); if (supplied !== undefined) { instances.set(name, supplied); return supplied; } if (!preview) fail("unbound source input: " + name); }
                 if (creating.has(name)) fail("cyclic source dependency"); creating.add(name);
                 let created: SourceInstance;
                 try { created = this.sources.get(spec.type)!.Create(spec.props, { Preview: preview, Manual: document.enabled === "always", Item: () => itemScope?.value, Unit: unit, Source: source }); } finally { creating.delete(name); }
@@ -383,12 +482,18 @@ export class Presets extends Library<PresetDocument> implements PresetAPI {
                 if (created.Dispose !== undefined) ownedCleanups.push(() => created.Dispose!());
                 return created;
             };
+            const unavailable = (name: string): boolean => {
+                const spec = specs.get(name); if (spec === undefined) return false;
+                if (spec.isProp) return borrowed?.(name) === undefined;
+                return (this.sources.get(spec.type)!.references ?? []).some(key => unavailable(spec.props[key] as string));
+            };
             const build = (node: PresetNode): Cell[] => {
+                if ([node.source, node.visibleSource, node.textSource, node.alphaSource, ...Object.values(node.bindings ?? {}).map(binding => binding.source)].some(name => name !== undefined && unavailable(name))) return [];
                 if (node.type === "fragment") {
                     const result: Cell[] = []; for (const child of node.children ?? []) result.push(...build(child)); return result;
                 }
                 if (node.type === "preset") {
-                    const result = buildDocument(documents.get(node.preset!)!, prefix + node.id + "/", units, ownedCleanups, itemScope);
+                    const result = buildDocument(referenceDocument(documents.get(node.preset!)!, node), prefix + node.id + "/", units, ownedCleanups, itemScope, name => node.sourceProps?.[name] === undefined || unavailable(node.sourceProps[name]) ? undefined : source(node.sourceProps[name]));
                     const view = result[0];
                     if (view !== undefined) {
                         const props = view.props as Record<string, unknown>;
@@ -403,7 +508,7 @@ export class Presets extends Library<PresetDocument> implements PresetAPI {
                     return result;
                 }
                 const definition = this.components.get(node.type)!;
-                const context = { Preview: preview, Item: () => itemScope?.value, Unit: unit, Source: (): SourceInstance | undefined => {
+                const context = { Preview: preview, Item: () => itemScope?.value, Unit: unit, ResolveSource: source, Source: (): SourceInstance | undefined => {
                     if (node.items !== undefined) {
                         const name = "inline:" + node.id;
                         if (!specs.has(name)) specs.set(name, this.ParseItems(node.items));
@@ -427,6 +532,32 @@ export class Presets extends Library<PresetDocument> implements PresetAPI {
                     if (last !== capability && !(last === "cooldown" && capability === "progress")) fail("path has an incompatible source type");
                     return { [capability]: value } as SourceInstance;
                 } };
+                if (definition.headless === true && definition.deferred === true) {
+                    const template = node.children?.[0];
+                    const createTemplate = (token: string, sample = false) => {
+                        if (template === undefined) fail("missing dynamic replacement template");
+                        const disposers: (() => void)[] = [];
+                        const scopePrefix = prefix + node.id + "/" + token + "/";
+                        const dispose = () => {
+                            disposeAll(disposers);
+                            // An onMount failure can occur before a node's own disposer is installed.
+                            for (const [id] of nodes) if (id.startsWith(scopePrefix)) nodes.delete(id);
+                        };
+                        try {
+                            const result = buildDocument({ ...document, root: template }, scopePrefix,
+                                { unit: new UnitSource(token) }, disposers, undefined, borrowed)[0];
+                            if (result === undefined) fail("replacement template must return a visual tree");
+                            const props = result.props as Record<string, unknown>;
+                            props.mode = "relative"; props.anchor = "CENTER"; props.relativeAnchor = "CENTER";
+                            props.offset = { x: 0, y: 0 }; delete props.relativeTo; delete props.x; delete props.y;
+                            if (sample) ownedCleanups.push(dispose);
+                            return { View: result, Dispose: dispose };
+                        } catch (failure) { dispose(); throw failure; }
+                    };
+                    if (preview) return template === undefined ? [] : [createTemplate("target", true).View];
+                    effects.push(() => definition.Apply(node.props, { ...context, Template: createTemplate }));
+                    return [];
+                }
                 if (node.type === "foreach") {
                     const collection = context.Source(), list = collection?.items;
                     if (collection === undefined || list === undefined) fail("ForEach source must provide an observable list");
@@ -448,7 +579,7 @@ export class Presets extends Library<PresetDocument> implements PresetAPI {
                             try {
                                 const templateIndex = Math.min(collection.ItemsTemplate?.(value) ?? 0, node.children!.length - 1);
                                 const template = node.children![templateIndex];
-                                const child = buildDocument({ ...document, root: template }, prefix + node.id + "/" + key(value) + "/", unitScope, disposers, scope)[0];
+                                const child = buildDocument({ ...document, root: template }, prefix + node.id + "/" + key(value) + "/", unitScope, disposers, scope, borrowed)[0];
                                 if (child === undefined) fail("ForEach templates must return a Cell");
                                 if (preview) disableInput(child);
                                 scopes.set(child, { units: unitScope, item: scope, dispose: () => disposeAll(disposers) }); return child;
@@ -457,7 +588,7 @@ export class Presets extends Library<PresetDocument> implements PresetAPI {
                         onUpdate: (child, value) => {
                             const scope = scopes.get(child)!; scope.item.value = value;
                             const token = collection.ItemsUnit?.(value);
-                            if (scope.units !== undefined && token !== undefined) { scope.units.unit.Retarget(token); scope.units.pet.Retarget(petUnit(token)); }
+                            if (scope.units !== undefined && token !== undefined) { scope.units.unit.Retarget(token); scope.units.pet?.Retarget(petUnit(token)); }
                         },
                         onDispose: child => { scopes.get(child)?.dispose(); scopes.delete(child); },
                     });
@@ -480,7 +611,9 @@ export class Presets extends Library<PresetDocument> implements PresetAPI {
                         if (binding !== undefined) inputProps.binding = binding;
                     }
                 }
+                const bindProperties = preparePropertyBindings(node, inputProps, source, ownedCleanups);
                 const view = definition.Create(inputProps, children, context);
+                bindProperties(view);
                 views.set(node.id, view);
                 if (typeof relativeTo === "string") (view.props as Record<string, unknown>).relativeTo = relativeTo;
                 const props = view.props as Record<string, unknown>;
@@ -592,10 +725,25 @@ export class Presets extends Library<PresetDocument> implements PresetAPI {
         if (active !== undefined && this.active.get(document.id) === active && new ActivationContext(this.Layouts).Matches(document)) this.Mount(document);
         this.Restore();
     }
+    private MissingReference(document: PresetDocument): string | undefined {
+        const seen = new Set<string>();
+        const visit = (node: PresetNode): string | undefined => {
+            if (node.preset !== undefined && !seen.has(node.preset)) {
+                seen.add(node.preset); const child = this.Get(node.preset);
+                if (child === undefined) return node.preset;
+                const missing = visit(child.root); if (missing !== undefined) return missing;
+            }
+            for (const child of node.children ?? []) { const missing = visit(child); if (missing !== undefined) return missing; }
+            return undefined;
+        };
+        return visit(document.root);
+    }
     public ActivationStatus(id: string): string {
         const document = this.Get(id); if (document === undefined) return "Unavailable";
         if (document.enabled === "never" || !this.store.get(BuilderSettings).enabled.includes("preset:" + id)) return "Disabled";
         if (this.active.has(id)) return "Active";
+        const missing = this.MissingReference(document); if (missing !== undefined) return "Missing component: " + missing;
+        if (document.sources.some(source => source.isProp && !source.optional)) return "Waiting for external source inputs";
         if (InCombatLockdown()) return "Waiting for combat to end";
         if (!new ActivationContext(this.Layouts).Matches(document)) return "Waiting for class, condition or native layout";
         if (document.owner !== undefined && C_AddOns?.IsAddOnLoaded?.(document.owner) !== true) return "Waiting for addon";
@@ -603,17 +751,17 @@ export class Presets extends Library<PresetDocument> implements PresetAPI {
     }
 
     private ActivationSignature(document: PresetDocument, context: ActivationContext, documents: ReadonlyMap<string, PresetDocument>): string {
-        const seen = new Set<string>(), parts: string[] = [];
+        const stack = new Set<string>(), parts: string[] = [];
         const visitDocument = (doc: PresetDocument) => {
-            if (seen.has(doc.id)) return; seen.add(doc.id);
+            if (stack.has(doc.id)) return; stack.add(doc.id);
             const matched = context.Matches(doc); parts.push(doc.id + (matched ? ":1" : ":0"));
             if (doc.layoutPositions !== undefined) parts.push("position:" + (context.LayoutKey ?? ""));
-            if (!matched) return;
+            if (!matched) { stack.delete(doc.id); return; }
             const visit = (node: PresetNode) => {
-                if (node.preset !== undefined) { const child = documents.get(node.preset); if (child !== undefined) visitDocument(child); }
+                if (node.preset !== undefined) { const child = documents.get(node.preset); if (child !== undefined) { const effective = referenceDocument(child, node); parts.push(node.id + ":" + context.Matches(effective)); visitDocument(effective); } }
                 for (const child of node.children ?? []) visit(child);
             };
-            visit(doc.root);
+            visit(doc.root); stack.delete(doc.id);
         };
         visitDocument(document); return parts.join("|");
     }
@@ -633,7 +781,9 @@ export class Presets extends Library<PresetDocument> implements PresetAPI {
                 const wanted = enabled.has("preset:" + id) && !this.paused.has(id)
                     && document.enabled !== "never"
                     && (document.owner === undefined || C_AddOns?.IsAddOnLoaded?.(document.owner) === true)
-                    && context.Matches(document);
+                    && context.Matches(document)
+                    && this.MissingReference(document) === undefined
+                    && !document.sources.some(source => source.isProp && !source.optional);
                 if (!wanted) { if (this.active.has(id)) this.ReleaseActive(id); continue; }
                 const signature = this.ActivationSignature(document, context, documents);
                 if (this.active.has(id) && this.activationSignatures.get(id) === signature) continue;

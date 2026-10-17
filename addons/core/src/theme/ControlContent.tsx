@@ -29,7 +29,6 @@ export function ControlContent({ text, icon, width, height = 24, size = 10, colo
 }
 export function controlIcon(text: string): string {
     const icons: Record<string, string> = { Enable: "enabled", Disable: "disabled", Edit: "edit", Export: "export", Delete: "trash",
-        "New blank": "plus", "New party": "units", "New raid": "grid", "New spell list": "repeat", "New headless": "effects",
         "Built-in presets": "import", "Add binding": "plus", "Save preset": "save", New: "plus", "Choose action...": "button" };
     return icons[text] ?? "button";
 }

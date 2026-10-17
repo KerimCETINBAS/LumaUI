@@ -247,3 +247,7 @@ function SetPortraitTexture(texture,unit,square)
  assert(type(unit)=='string' and square==true)
  texture.portraitUnit=unit;texture.portraitUpdates=(texture.portraitUpdates or 0)+1
 end
+
+function UnitIsPlayer(unit) return not tostring(unit):find("pet",1,true) end
+
+RAID_CLASS_COLORS={PALADIN={r=1,g=.5,b=.7},MAGE={r=.2,g=.5,b=1}}

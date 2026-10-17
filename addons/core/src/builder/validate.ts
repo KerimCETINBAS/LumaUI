@@ -49,7 +49,16 @@ function number(value: unknown, rule: PropertyRule): void {
 }
 function check(value: DataValue, rule: PropertyRule): void {
     if (rule.values !== undefined && !rule.values.includes(value as string | number)) fail("invalid choice");
+    if (rule.type === "value") { copy(value); return; }
+    if (rule.type === "cases") {
+        for (const entry of array(value, 64)) { const row = record(entry); keys(row, ["equals", "value"]); if (!["string", "number", "boolean"].includes(typeof row.equals) || row.value === undefined) fail("invalid converter case"); copy(row.value); }
+        return;
+    }
     if (rule.type === "number") number(value, rule);
+    else if (rule.type === "texture") {
+        if (typeof value === "number") { number(value, { type: "number", min: 1, max: 2147483647 }); if (!Number.isInteger(value)) fail("invalid texture ID"); }
+        else text(value, "texture", 4096);
+    }
     else if (rule.type === "string" || rule.type === "boolean") {
         if (typeof value !== rule.type) fail("invalid " + rule.type);
     } else if (rule.type === "size") { if (value !== "inherit") number(value, { type: "number", min: 0, max: 8192 }); }

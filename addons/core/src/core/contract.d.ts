@@ -3,7 +3,6 @@ export type * from "./builder";
 import type { Cell } from "wuira";
 import type { StoreRegistry } from "wuira/store";
 export type EditMode = "locked" | "unlock" | "keys";
-export type PresetDraftKind = "visual" | "headless" | "party" | "raid" | "spells";
 interface Color { readonly r: number; readonly g: number; readonly b: number; readonly a: number; }
 export interface LumaTheme {
     readonly icons: Readonly<Record<string, string>>;
@@ -13,14 +12,18 @@ export interface LumaTheme {
 }
 export interface LumaModule { SetMode(mode: EditMode): void; Reset(): void; }
 export interface CustomizationContext { readonly width: number; readonly height: number; }
-export interface CustomizationPage { readonly id: string; readonly title: string; readonly summary?: string; readonly workspace?: boolean; Render(context: CustomizationContext): Cell | void; }
+export type PreviewZoom = number | "fit";
+export interface ComponentPreviewProps { readonly document: PresetDocument; readonly width: number; readonly height: number;
+    readonly selected?: string; readonly onSelect?: (id: string) => void; readonly zoom?: PreviewZoom; readonly onZoomChange?: (zoom: PreviewZoom) => void; }
+export interface CustomizationPage { readonly id: string; readonly title: string; readonly summary?: string; readonly workspace?: boolean; readonly sidebar?: boolean; Suspend?(): void; Render(context: CustomizationContext): Cell | void; }
 export interface LumaCoreAPI {
+    Preview(props: ComponentPreviewProps): Cell;
     readonly Helpers: LumaHelpers;
     readonly ClickCastPresets: ClickCastLibraryAPI;
     readonly StandardClickPreset: StandardClickPreset;
     RegisterPresetEditor(editor: (document: PresetDocument) => void): () => void;
-    RegisterPresetCreator(creator: (kind: PresetDraftKind) => void): () => void;
-    CreatePreset(kind: PresetDraftKind): void;
+    RegisterPresetCreator(creator: () => void): () => void;
+    CreatePreset(): void;
     EditPreset(document: PresetDocument): void;
     OpenImport(kind: "preset" | "skin", onImported?: (document: BuilderDocument) => void, importString?: string): void;
     OpenExport(document: BuilderDocument, clickCastPresets?: readonly import("./builder").ClickCastPresetDocument[]): void;

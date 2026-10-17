@@ -14,8 +14,13 @@ import { PrimaryPower, unitText, unitIndicator, tintPrimaryPower } from "./UnitW
 import { unitAuraIndicator } from "./UnitAuraIndicator";
 import { unitAuraIcons } from "./UnitAuraIcons";
 import { configureUnitButton } from "./UnitButton";
-import { bindUnitClassColor } from "./UnitClassColor";
+import { actionTooltip } from "./ActionTooltip";
+import { registerConverterSources } from "./ConverterSources";
+import { UnitToBool, unitFilterProperties } from "../helpers/UnitToBool";
+import { blizzardElementProperties, validateBlizzardElement } from "./BlizzardElement";
+import type { BlizzardElementProps, UnitFilter } from "../core/builder";
 import { GroupRoster } from "./GroupRoster";
+import { listRecords } from "./ListRecords";
 import type { GroupRosterMember, KnownSpell } from "wuira/datasources";
 import { KnownSpellCollection } from "../helpers/KnownSpells";
 import { parseSpellSelectors } from "../helpers/NameSelectors";
@@ -40,6 +45,22 @@ function visual(input: Properties): Partial<CellProps> {
     return props;
 }
 export function registerBuiltins(presets: Presets, skins: Skins): void {
+    presets.RegisterSource("unitToBool", { properties: unitFilterProperties,
+        Validate: props => { UnitToBool(props as unknown as UnitFilter); },
+        Create: props => ({ MatchUnit: UnitToBool(props as unknown as UnitFilter) }) });
+    presets.RegisterComponent("blizzardElement", { headless: true, deferred: true, children: "single",
+        properties: blizzardElementProperties, Validate: validateBlizzardElement,
+        Apply: (props, context) => {
+            const filter = context.ResolveSource(props.filter as string).MatchUnit;
+            if (filter === undefined) throw "BlizzardElement filter must provide unit-to-boolean conversion";
+            const render: import("wuira/skins").NameplateRender | undefined = props.replace === true ? plate => {
+                const template = context.Template!(plate.Unit);
+                plate.OnDispose(() => template.Dispose());
+                return template.View;
+            } : undefined;
+            const handle = skins.RegisterElement({ ...props, filter, child: render } as unknown as BlizzardElementProps);
+            return () => handle.Dispose();
+        } });
     presets.RegisterComponent("foreach", { children: "multiple", source: "items", properties: { ...common,
         key: { type: "string", values: ["key"] }, groupBy: { type: "string", values: ["group"] },
         direction: { type: "string", values: ["horizontal", "vertical"] }, wrapAfter: { type: "number", min: 1, max: 40 },
@@ -51,19 +72,18 @@ export function registerBuiltins(presets: Presets, skins: Skins): void {
     presets.RegisterComponent("unitIndicator", { children: "none", properties: { ...common, unit: { type: "string", required: true }, field: { type: "string", values: ["role", "leader"] } },
         Create: (props, _children, context) => unitIndicator(visual(props), context.Unit(props.unit as string), props.field as string ?? "role", context.Preview === true) });
     presets.RegisterComponent("unitAuras", { children: "none", properties: { ...common, unit: { type: "string", required: true },
-        category: { type: "string", required: true, values: ["buffs", "dispellable", "movement", "other"] }, movementSpellIds: { type: "numbers" },
+        category: { type: "string", required: true, values: ["buffs", "dispellable", "movement", "other"] }, movementSpellIds: { type: "numbers", editor: "spell" },
         maxIcons: { type: "number", min: 1, max: 16 }, iconSize: { type: "number", min: 8, max: 64 }, compartmentBorder: { type: "color" }, hoverBackground: { type: "color" } },
         Create: (props, _children, context) => unitAuraIcons(visual(props), context.Unit(props.unit as string), props.category as string, props.movementSpellIds as number[] | undefined ?? [], context.Preview === true, props.maxIcons as number | undefined, props.iconSize as number | undefined,
             props.compartmentBorder === undefined ? undefined : { border: props.compartmentBorder as unknown as { r: number; g: number; b: number; a?: number }, hover: props.hoverBackground as unknown as { r: number; g: number; b: number; a?: number } | undefined }) });
     presets.RegisterComponent("unitAuraIndicator", { children: "none", properties: { ...common, unit: { type: "string", required: true },
-        category: { type: "string", required: true, values: ["dispellable", "movement"] }, spellId: { ...positive, required: true },
-        movementSpellIds: { type: "numbers" }, iconSize: { type: "number", min: 8, max: 64 }, idleBorder: { type: "color" }, activeBorder: { type: "color" }, hoverBackground: { type: "color" } },
+        category: { type: "string", required: true, values: ["dispellable", "movement"] }, spellId: { ...positive, editor: "spell", required: true },
+        movementSpellIds: { type: "numbers", editor: "spell" }, iconSize: { type: "number", min: 8, max: 64 }, idleBorder: { type: "color" }, activeBorder: { type: "color" }, hoverBackground: { type: "color" } },
         Create: (props, _children, context) => { const { idleBorder, activeBorder, hoverBackground, ...rest } = props;
             return unitAuraIndicator(visual(rest), context.Unit(props.unit as string), props.category as string, props.spellId as number, props.movementSpellIds as number[] | undefined ?? [], context.Preview === true,
                 props.iconSize as number | undefined, idleBorder as unknown as { r: number; g: number; b: number } | undefined, activeBorder as unknown as { r: number; g: number; b: number } | undefined, hoverBackground as unknown as { r: number; g: number; b: number } | undefined); } });
-    presets.RegisterComponent("hideActionBars", { headless: true, children: "none", properties: {}, Apply: () => hideNativeFrames({ actionBars: true }) });
     presets.RegisterComponent("hideUnitFrame", { headless: true, children: "none", properties: {
-        unit: { type: "string", required: true, values: ["player", "target", "focus"] },
+        unit: { type: "string", required: true, values: ["player", "target", "focus", "actionBars"] },
     }, Apply: props => hideNativeFrames({ [props.unit as string]: true }) });
     presets.RegisterComponent("unitPortrait", { children: "none", properties: { ...common,
         unit: { type: "string", required: true }, texCoords: { type: "texCoords" } },
@@ -88,26 +108,25 @@ export function registerBuiltins(presets: Presets, skins: Skins): void {
         text: { type: "string", required: true }, font: { type: "string" }, fontSize: { type: "number", min: 1, max: 128 }, color: { type: "color" },
         align: { type: "string", values: ["LEFT", "CENTER", "RIGHT"] } },
         Create: props => UI.createElement("label", visual(props)) });
-    presets.RegisterComponent("icon", { children: "none", source: "texture", properties: { ...common, texture: { type: "string" }, texCoords: { type: "texCoords" } },
+    presets.RegisterComponent("icon", { children: "none", source: "texture", properties: { ...common, texture: { type: "texture", editor: "icon" }, texCoords: { type: "texCoords" } },
         Create: (props, _children, context) => UI.createElement("icon", { ...visual(props), textureSource: context.Source()?.texture } as Partial<IconProps>) });
     presets.RegisterComponent("secureButton", { children: "single", source: "action", properties: { ...common,
-        action: { type: "action" }, binding: { type: "string" }, clickCastPreset: { type: "string" }, showHotkey: { type: "boolean" }, finishGlow: { type: "boolean" },
+        action: { type: "action" }, binding: { type: "string" }, clickCastPreset: { type: "string" }, showHotkey: { type: "boolean" }, showTooltip: { type: "boolean" }, finishGlow: { type: "boolean" },
         button: { type: "string", values: ["LeftButton", "RightButton", "MiddleButton", "Button4", "Button5"] },
-        unit: { type: "string" }, unitWatch: { type: "boolean" }, classBorder: { type: "boolean" }, classBackground: { type: "boolean" }, visibilityGroup: { type: "string", values: ["party", "raid"] } },
+        unit: { type: "string" }, unitWatch: { type: "boolean" }, visibilityGroup: { type: "string", values: ["party", "raid"] } },
         Create: (props, children, context) => {
             const source = context.Source();
             const token = props.unit as string | undefined ?? (props.clickCastPreset === undefined ? undefined : "target");
             const unit = token === undefined ? undefined : context.Unit(token);
-            const preset = props.clickCastPreset === undefined || props.clickCastPreset === "standard" ? undefined : presets.ResolveClickCast(props.clickCastPreset as string);
-            if (props.clickCastPreset !== undefined && props.clickCastPreset !== "standard" && preset === undefined) throw "Missing Click Cast preset";
-            return UI.createElement("secureButton", { ...visual(props), action: props.action as unknown as SecureAction | undefined ?? source?.action,
+            const preset = context.Preview || props.clickCastPreset === undefined || props.clickCastPreset === "standard" ? undefined : presets.ResolveClickCast(props.clickCastPreset as string);
+            if (!context.Preview && props.clickCastPreset !== undefined && props.clickCastPreset !== "standard" && preset === undefined) throw "Missing Click Cast preset";
+            const appearance = visual(props);
+            if (!context.Preview && props.showTooltip !== false) appearance.decorations = { ...appearance.decorations,
+                tooltip: actionTooltip(() => context.Source()?.action ?? props.action as unknown as SecureAction | undefined) };
+            return UI.createElement("secureButton", { ...appearance, action: source?.action ?? props.action as unknown as SecureAction | undefined,
                 onMount: unit === undefined ? undefined : (frame: wuiraNativeFrame) => {
                     const stopAction = context.Preview ? undefined : configureUnitButton(frame, unit, preset, props.unitWatch === true);
-                    let stopColor: (() => void) | undefined;
-                    try {
-                        if (props.classBorder === true || props.classBackground === true) stopColor = bindUnitClassColor(frame, unit, props.classBackground === true, props.classBorder === true, context.Preview === true);
-                    } catch (failure) { stopAction?.(); throw failure; }
-                    return () => { stopColor?.(); stopAction?.(); };
+                    return () => { stopAction?.(); };
                 },
                 cooldown: source?.cooldown, clickThrough: false } as Partial<SecureButtonProps>, children);
         } });
@@ -115,13 +134,15 @@ export function registerBuiltins(presets: Presets, skins: Skins): void {
         const hp = new HP(context.Unit(props.unit as string | undefined ?? "player"));
         if (props.healPrediction === true) hp.UseHealPrediction();
         if (props.absorbPrediction === true) hp.UseAbsorbPrediction();
-        return { progress: hp };
+        return { value: hp, progress: hp };
     } });
     presets.RegisterSource("mana", { properties: { ...unit, regenTimer: { type: "boolean" } }, Create: (props, context) => {
         const mana = new Mana(context.Unit(props.unit as string | undefined ?? "player")); if (props.regenTimer === true) mana.UseRegenTimer();
-        return { progress: mana, channels: mana.RegenTimer === undefined ? undefined : { regen: { progress: mana.RegenTimer } }, Dispose: () => mana.RegenTimer?.Dispose() };
+        return { value: mana, progress: mana, channels: mana.RegenTimer === undefined ? undefined : { regen: { progress: mana.RegenTimer } }, Dispose: () => mana.RegenTimer?.Dispose() };
     } });
-    presets.RegisterSource("power", { properties: unit, Create: (props, context) => ({ progress: new PrimaryPower(context.Unit(props.unit as string | undefined ?? "player")) }) });
+    presets.RegisterSource("power", { properties: unit, Create: (props, context) => { const power = new PrimaryPower(context.Unit(props.unit as string | undefined ?? "player")); return { value: power, progress: power }; } });
+    presets.RegisterSource("list", { properties: { items: { type: "value" } }, Validate: props => { listRecords(props); },
+        Create: props => { const values = listRecords(props); return { items: { Value: values, onChange: () => () => {} }, ItemsKey: item => (item as { key: string | number }).key }; } });
     presets.RegisterSource("groupMembers", { properties: { scope: { type: "string", values: ["auto", "party", "raid"] }, pets: { type: "boolean" } },
         Create: (props, context) => {
             const list = new GroupRoster(props.scope as GroupScope | undefined ?? "auto", props.pets === true, context.Manual === true, context.Preview === true);
@@ -144,18 +165,18 @@ export function registerBuiltins(presets: Presets, skins: Skins): void {
     } });
     presets.RegisterSource("channel", { properties: { source: { type: "string", required: true }, channel: { type: "string", required: true } }, references: ["source"],
         Create: (props, context) => { const channel = context.Source(props.source as string).channels?.[props.channel as string]; if (channel === undefined) throw "Missing source channel"; return channel; } });
-    presets.RegisterSource("totem", { properties: { spellId: { ...positive, required: true } }, Create: props => { const timer = new TotemTimer(props.spellId as number); return { progress: timer, IsActive: () => timer.IsActive }; } });
+    presets.RegisterSource("totem", { properties: { spellId: { ...positive, editor: "spell", required: true } }, Create: props => { const timer = new TotemTimer(props.spellId as number); return { progress: timer, IsActive: () => timer.IsActive }; } });
     presets.RegisterSource("gcd", { properties: {}, Create: () => { const timer = new GlobalCooldown(); return { progress: timer, IsActive: () => timer.IsActive }; } });
-    presets.RegisterSource("cooldown", { properties: { spellId: { ...positive, required: true } },
+    presets.RegisterSource("cooldown", { properties: { spellId: { ...positive, editor: "spell", required: true } },
         Create: props => ({ progress: new SpellCooldown(props.spellId as number) }) });
     presets.RegisterSource("cast", { properties: unit, Create: props => { const timer = new CastTimer(props.unit as string | undefined ?? "player"); return { progress: timer, IsActive: () => timer.IsActive, Text: () => timer.SpellName }; } });
     presets.RegisterSource("swing", { properties: {}, Create: () => { const swing = new SwingTimer(); return { progress: swing, IsActive: () => swing.IsActive, Dispose: () => swing.Dispose() }; } });
-    presets.RegisterSource("aura", { properties: { ...unit, spellId: positive, spellIds: { type: "numbers" }, activeAlpha: { type: "number", min: 0, max: 1 }, inactiveAlpha: { type: "number", min: 0, max: 1 },
+    presets.RegisterSource("aura", { properties: { ...unit, spellId: { ...positive, editor: "spell" }, spellIds: { type: "numbers", editor: "spell" }, activeAlpha: { type: "number", min: 0, max: 1 }, inactiveAlpha: { type: "number", min: 0, max: 1 },
         filter: { type: "string", values: ["HELPFUL", "HARMFUL", "HELPFUL|PLAYER", "HARMFUL|PLAYER"] } }, Create: props => {
             const aura = new AuraTimer(props.unit as string | undefined ?? "player", { spellIds: props.spellIds as number[] | undefined ?? [props.spellId as number], filter: props.filter as "HELPFUL" | "HARMFUL" | "HELPFUL|PLAYER" | "HARMFUL|PLAYER" | undefined });
             return { progress: aura, texture: aura.Texture, IsActive: () => aura.IsActive, Alpha: () => aura.Status === "active" ? props.activeAlpha as number | undefined ?? 1 : props.inactiveAlpha as number | undefined ?? 1 };
         } });
-    presets.RegisterSource("spell", { properties: { spellId: { ...positive, required: true } }, Create: props => {
+    presets.RegisterSource("spell", { properties: { spellId: { ...positive, editor: "spell", required: true } }, Create: props => {
         const spell = new SpellSource(props.spellId as number);
         return { progress: spell.Cooldown, action: spell.Action, texture: spell.Texture, cooldown: spell.Cooldown };
     } });
@@ -166,4 +187,5 @@ export function registerBuiltins(presets: Presets, skins: Skins): void {
         icon: { type: "color" }, accent: { type: "color" }, disabledIcon: { type: "color" },
         padding: { type: "number", min: 0, max: 64 }, panel: { type: "boolean" },
     }, Apply: props => { const bar = new MicroBar().Style(props as unknown as MicroMenuSkinOptions); return () => bar.Dispose(); } });
+    registerConverterSources(presets);
 }

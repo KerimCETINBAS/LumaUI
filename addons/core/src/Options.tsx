@@ -5,6 +5,7 @@ import { Cell, FlowLayout, Button, Label, Background, Border } from "wuira/ui";
 import { LumaSettings } from "./settings";
 import { CustomizationWindow } from "./CustomizationWindow";
 import { installMinimapLauncher } from "./MinimapLauncher";
+import { SecureNameplateAudit } from "./SecureNameplateAudit";
 import type { CustomizationPage } from "./core/contract";
 import { darkTheme } from "./theme/dark";
 import type { EditMode, LumaModule } from "./core/contract";
@@ -18,10 +19,11 @@ function Control({ text, onClick }: { text: string; onClick: () => void }) {
 }
 
 function OptionsView({ options }: { options: LumaOptions }) {
-    return <FlowLayout width={560} height={260} padding={20} gap={16}>
+    return <FlowLayout width={560} height={310} padding={20} gap={16}>
         <Label height={32} text="LumaUI" fontSize={24} color={darkTheme.colors.accent} />
         <Label height={42} text="Customize your interface in the standalone LumaUI dashboard." fontSize={12} />
         <Control text="Open LumaUI" onClick={() => options.OpenCustomization()} />
+        <Control text="Unlock mode" onClick={() => options.SetMode("unlock")} />
         <Label height={42} text="You can also use /luma or the L button beside the minimap." fontSize={11} color={darkTheme.colors.muted} />
     </FlowLayout>;
 }
@@ -34,7 +36,7 @@ function EditToolbar({ options }: { options: LumaOptions }) {
             <Label height={18} text={() => options.Mode === "unlock" ? "LumaUI - Layout unlocked" : "LumaUI - Keybind mode"}
                 fontSize={14} color={darkTheme.colors.accent} />
             <Label height={18} fontSize={11} text={options.Mode === "unlock"
-                ? "Drag the blue handles. Changes are saved for this character."
+                ? "Drag blue handles for components and native frames. Positions follow the active layout."
                 : "Hover a button and press a key. Delete: clear binding. Escape: done."} />
             <Button width={100} height={26} onClick={() => options.SetMode("locked")}
                 decorations={{ background: new Background({ color: darkTheme.colors.surface }),
@@ -47,6 +49,7 @@ function EditToolbar({ options }: { options: LumaOptions }) {
 
 /** Shared editing policy. Feature addons own their controls. */
 export class LumaOptions {
+    private readonly securePlates = new SecureNameplateAudit();
     public readonly store = new StoreRegistry({ addon: "LumaUI", variable: "LumaUISettings" });
     private mode: EditMode = "locked";
     private readonly modules = new Map<string, LumaModule>();
@@ -63,7 +66,11 @@ export class LumaOptions {
         this.keyboard.EnableKeyboard(false);
         this.keyboard.Hide();
         this.keyboard.RegisterEvent("PLAYER_REGEN_DISABLED");
-        this.keyboard.SetScript("OnEvent", () => { this.SetMode("locked"); this.customization.Close(); });
+        this.keyboard.RegisterEvent("PLAYER_REGEN_ENABLED");
+        this.keyboard.SetScript("OnEvent", (_frame, event) => {
+            if (event === "PLAYER_REGEN_DISABLED") { this.SetMode("locked"); this.customization.Suspend(); }
+            else this.customization.Resume();
+        });
         this.keyboard.SetScript("OnKeyDown", (_frame, key) => {
             if (InCombatLockdown()) return;
             this.keyboard.SetPropagateKeyboardInput(key !== "ESCAPE");
@@ -96,6 +103,7 @@ export class LumaOptions {
         this.page = new AddonSettings("LumaUI", () => <OptionsView options={this} />);
         const command: CommandCallback = (...args) => {
             const command = (args.at(0) ?? "").toLowerCase();
+            if (command === "secureplates") { this.securePlates.Command(args.at(1)?.toLowerCase()); return; }
             if (command === "unlock") this.SetMode("unlock");
             else if (command === "bind" || command === "keybind") this.SetMode("keys");
             else if (command === "lock") this.SetMode("locked");
@@ -104,7 +112,8 @@ export class LumaOptions {
         };
         wuira.registerCommand("/luma", command);
         wuira.registerCommand("/lumaui", command);
-        installMinimapLauncher(() => this.OpenCustomization());
+        installMinimapLauncher(() => command(), () => this.Settings.minimapAngle,
+            angle => this.store.set(LumaSettings, settings => { settings.minimapAngle = angle; return settings; }));
     }
 
     public SetMode(mode: EditMode): void {

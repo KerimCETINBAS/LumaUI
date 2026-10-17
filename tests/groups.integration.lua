@@ -1,9 +1,11 @@
 do
-local apiNames={'UnitExists','UnitClass','UnitName','UnitFullName','UnitGUID','UnitGroupRolesAssigned','UnitIsGroupLeader','UnitPowerType','UnitHealth','UnitHealthMax','UnitHealthPercent','UnitPower','UnitPowerMax','UnitPowerPercent','IsInRaid','GetNumGroupMembers','GetRaidRosterInfo','RegisterStateDriver','UnregisterStateDriver','RAID_CLASS_COLORS','PowerBarColor','C_UnitAuras'}
+local apiNames={'UnitExists','UnitIsConnected','UnitClass','UnitName','UnitFullName','UnitGUID','UnitGroupRolesAssigned','UnitIsGroupLeader','UnitPowerType','UnitHealth','UnitHealthMax','UnitHealthPercent','UnitPower','UnitPowerMax','UnitPowerPercent','IsInRaid','GetNumGroupMembers','GetRaidRosterInfo','RegisterStateDriver','UnregisterStateDriver','RAID_CLASS_COLORS','PowerBarColor','C_UnitAuras'}
 local old={};for _,key in ipairs(apiNames) do old[key]=_G[key] end
 local raid,count,class=false,3,'PALADIN'
 local ids={player='P1',party1='P2',party2='P3',pet='PET1',partypet1='PET2'}
 local missingGUID={}
+local connected={}
+function UnitIsConnected(unit) local value=connected[unit];if value==nil then return true end;return value end
 local raidGroups={2,1,2}
 function UnitExists(unit) return ids[unit]~=nil end
 function UnitGUID(unit) return not missingGUID[unit] and ids[unit] or nil end
@@ -77,10 +79,11 @@ local originalRoot,originalP1,originalP2,originalP3=active.Frame,at('player','me
 local sourceP3=sources.P3
 for _,unit in ipairs({'player','party1','party2'}) do
  local outer,heal,cure=at(unit,'member-frame'),at(unit,'member-health'),at(unit,'member-purify')
- local strip=at(unit,'member-frame-select')
- assert(strip.kind=='Button' and strip.width==10 and strip.height==52 and strip.attributes.type1=='target' and strip.attributes.type2=='togglemenu' and strip.attributes.unit==unit,'the filled selection strip owns standard secure actions')
- assert(#outer.textures==0 and #strip.textures==1 and strip.texture.color[1]==1,'class fill replaces the enclosing outline')
- assert(at(unit,'member-frame-body').x==12 and at(unit,'member-health-bar').width==176,'selection strip preserves the existing bar area')
+ local heading=at(unit,'member-heading')
+ assert(not at(unit,'member-frame-select',true),'party selection strip is removed')
+ assert(heading.kind=='Button' and heading.height==14 and heading.attributes.type1=='target' and heading.attributes.type2=='togglemenu' and heading.attributes.unit==unit,'the name heading owns standard secure actions')
+ assert(#outer.textures==0 and #heading.textures==1 and heading.texture.color[1]==.96,'editable class color fills the name heading')
+ assert(at(unit,'member-frame-body').x==0 and at(unit,'member-health-bar').width==188,'bars use the removed strip space')
  assert(outer.attributes.type1=='target' and outer.attributes.type2=='togglemenu' and outer.attributes.unit==unit)
  assert(heal.attributes.type1=='spell' and heal.attributes.unit==unit and heal.attributes.spell1==635)
  assert(cure.attributes.spell1==1152 and cure.attributes.unit==unit)
@@ -109,9 +112,27 @@ assert(pulse.playing and cureEdges[1].color[1]==1 and cure.texture.shown and roo
 combat=false;hover(false)
 
 assert(at('pet','pet-frame').shown and not at('party3','member-frame',true),'no speculative party slots')
-local stripFill=at('player','member-frame-select').texture
-class='MAGE';emit('UNIT_NAME_UPDATE','player');assert(stripFill.color[1]==.2,'selection fill tracks the displayed unit class')
+local headingFill=at('player','member-heading').texture
+class='MAGE';emit('UNIT_NAME_UPDATE','player');assert(headingFill.color[1]==.25,'heading fill tracks the displayed unit class')
 class='PALADIN';emit('UNIT_NAME_UPDATE','player')
+-- Connection swaps only visual alpha; no secure attributes, geometry or source identities change.
+assert(not findNode(party.root,'member-role') and not findNode(raidDoc.root,'member-role'),'starter headings omit role icons')
+local online,offline=at('party1','member-online-resources'),at('party1','member-offline')
+assert(online.alpha==1 and offline.alpha==0 and offline.fontString.text=='OFFLINE')
+assert(offline.relative==online,'offline panel anchors to the resource area')
+local connectionFrames=#nativeFrames
+local healthSource=sources.P2
+combat=true;connected.party1=false;emit('UNIT_CONNECTION','party1')
+assert(online.alpha==0 and offline.alpha==1 and at('party1','member-heading').alpha~=0,'offline replaces all resource visuals while keeping the heading')
+assert(online.shown and at('party1','member-health').shown and at('party1','member-health').attributes.spell1==635,'combat does not hide or modify protected buttons')
+assert(sources.P2==healthSource and creates==5 and disposals==0 and #nativeFrames==connectionFrames,'disconnect does not rebuild frames or subscriptions')
+connected.party1=true;emit('UNIT_CONNECTION','party2')
+assert(online.alpha==0,'unrelated unit events do not change this member')
+emit('UNIT_CONNECTION','party1');assert(online.alpha==1 and offline.alpha==0,'reconnect restores the same resource tree')
+connected.party1=false;emit('GROUP_ROSTER_UPDATE');assert(offline.alpha==1,'roster refresh also updates connection state')
+connected.party1={secret=true};emit('UNIT_CONNECTION','party1');assert(offline.alpha==0 and online.alpha==1,'restricted data cannot falsely mark a member offline')
+connected.party1=true;emit('UNIT_CONNECTION','party1');combat=false
+
 local beforeFrames=#nativeFrames
 local beforeAnchors=originalP2.pointCalls
 emit('UNIT_CONNECTION','party1');emit('UNIT_CONNECTION','party1')
@@ -126,7 +147,7 @@ count=3;ids.party1='P3';ids.party2='P4';ids.party3=nil;ids.partypet1=nil
 emit('GROUP_ROSTER_UPDATE');driverTick()
 assert(creates==6 and disposals==2,'leaving disposes only the departed member and pet')
 assert(at('party1','member-frame')==originalP3 and sources.P3==sourceP3 and sourceP3.target.Token=='party1','GUID survives slot reassignment with the same source object')
-assert(at('party1','member-health').attributes.unit=='party1' and at('party1','member-frame-select').attributes.unit=='party1','secure targets retarget with the retained display')
+assert(at('party1','member-health').attributes.unit=='party1' and at('party1','member-heading').attributes.unit=='party1','secure targets retarget with the retained display')
 emit('UNIT_HEALTH','party1')
 assert(at('party1','member-health-bar').value==777,'retained event subscription filters the new unit token')
 local healPreset=LumaUI.ClickCastPresets:Get(findNode(party.root,'member-health').props.clickCastPreset)
@@ -183,7 +204,7 @@ local preview=LumaUI.Presets:Preview(party)
 preview.Frame=master.require('lua_modules.wuira.lib.index').wuira:Mount(preview.View)
 assert(preview.Nodes:get('member-frame') and preview.Nodes:get('pet-frame'),'preview exposes member/pet template aliases')
 assert(preview.Nodes:get('member-frame').width==192 and preview.Nodes:get('member-frame').height==52)
-assert(next(drivers)==nil and preview.Nodes:get('member-frame-select').kind=='Frame' and not preview.Nodes:get('member-frame-select').attributes,'preview class fill never enables secure actions')
+assert(next(drivers)==nil and preview.Nodes:get('member-heading').kind=='Frame' and not preview.Nodes:get('member-heading').attributes,'preview class fill never enables secure actions')
 preview:Dispose();assert(preview.Nodes.size==0,'preview releases all keyed nodes and aliases')
 -- Editing/reopening a built-in component must not restore shipped geometry.
 local edited=LumaUI.Presets:Get('paladin-party')
@@ -202,6 +223,19 @@ assert(findNode(restored.root,'member-heading').props.backgroundColor.r==.2,'reo
 LumaUI.Presets:Restore()
 assert(findNode(LumaUI.Presets:Get('paladin-party').root,'member-power').props.height==8 and LumaUI.Presets:ActivationStatus('paladin-party')=='Disabled','reconciliation preserves custom geometry and manual disable')
 hpDef.Create=originalCreate
+-- Fixed unit imports mount with independent node trees using the existing factories.
+local fixedPlayer=importBuiltin(LumaUI,master,'PlayerUnitFrame')
+local fixedTarget=importBuiltin(LumaUI,master,'TargetUnitFrame')
+fixedPlayer.enabled='always';fixedPlayer.class=nil
+fixedTarget.enabled='always';fixedTarget.class=nil
+local mountedPlayer=LumaUI.Presets:Mount(fixedPlayer)
+local mountedTarget=LumaUI.Presets:Mount(fixedTarget)
+assert(mountedPlayer.Frame~=mountedTarget.Frame)
+assert(mountedPlayer.Nodes:get('member-frame').attributes.unit=='player')
+assert(mountedTarget.Nodes:get('member-frame').attributes.unit=='target')
+mountedPlayer:Dispose()
+assert(mountedTarget.Nodes:get('member-frame').attributes.unit=='target')
+mountedTarget:Dispose()
 __CLICK_CAST_CHECKS__
 for _,key in ipairs(apiNames) do _G[key]=old[key] end
 originalPrint('Keyed party/raid: GUID reuse, DC/online, join/leave, token retargeting, manual visibility and combat reconciliation passed')

@@ -20,6 +20,12 @@ do
  assert(#values==5,'active learned spells, equipped on-use gear, unique consumables and unambiguous named macros only')
  local byKey={};for _,item in ipairs(values) do byKey[item.key]=item end
  assert(byKey['spell:635'] and not byKey['spell:999'] and byKey['item:100'].category=='item' and byKey['item:200'].category=='consumable' and byKey['macro:Heal'].action.macro=='Heal')
+ assert(byKey['item:100'].equipped==true and byKey['item:200'].equipped==false,'equipment identity is exposed independently of item category')
+ local moves=0;local stopMove=list:onChange(function() moves=moves+1 end)
+ equipment[13]=nil;bag={100,200,300};emit('PLAYER_EQUIPMENT_CHANGED')
+ local moved;for _,entry in ipairs(list.Value)do if entry.key=='item:100' then moved=entry end end
+ assert(moves==1 and moved and moved.equipped==false,'moving on-use gear into bags emits even when IDs and category are unchanged')
+ equipment[13]=100;bag={200,200,300};emit('PLAYER_EQUIPMENT_CHANGED');assert(moves==2);stopMove()
  values[1].name='changed';values[1].action.spellId=1
  local before=reads;local cached=list.Value;assert(reads==before and cached[1].name~='changed','reads are detached and never poll native APIs')
  local updates=0;list:onChange(function() updates=updates+1 end)

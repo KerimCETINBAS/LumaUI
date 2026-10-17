@@ -77,8 +77,10 @@ doubleClick(document.name);tick()
 rename=input(document.name);typeText(rename,'  Renamed action buttons  ');rename.scripts.OnEnterPressed(rename);tick()
 assert(draft.documentName=='Renamed action buttons' and draft.dirty and LumaUI.Presets:Get(document.id).name==document.name,'Enter stages a trimmed name until Save')
 click('Save');tick()
-assert(LumaUI.Presets:Get(document.id).name=='Renamed action buttons' and LumaUI.Presets:Get('ux-parent').root.preset==document.id and LumaUI.Presets:GetBinding(document.id,'button-1-1')=='CTRL-U','rename preserves component identity, references and character bindings')
-doubleClick('Renamed action buttons');tick();typeText(input('Renamed action buttons'),'Final action buttons');click('Save');tick()
+assert(draft.identityPrompt,'rename asks whether references should be updated')
+click('Yes · update references');tick();document.id=draft.documentId
+assert(LumaUI.Presets:Get(document.id).name=='Renamed action buttons' and LumaUI.Presets:Get('ux-parent').root.preset==document.id and LumaUI.Presets:GetBinding(document.id,'button-1-1')=='CTRL-U','confirmed rename updates identity and references while preserving character bindings')
+doubleClick('Renamed action buttons');tick();typeText(input('Renamed action buttons'),'Final action buttons');click('Save');tick();click('Yes · update references');tick();document.id=draft.documentId
 assert(not draft.renaming and LumaUI.Presets:Get(document.id).name=='Final action buttons','Save also commits a focused name input')
 
 local count=#draft.nodes
@@ -94,7 +96,7 @@ for index=#nativeFrames,1,-1 do local f=nativeFrames[index];if f.kind=='ScrollFr
 assert(viewport and viewport:GetVerticalScrollRange()>0 and not visible('^'),'tree uses native scrolling without pager controls')
 viewport.scripts.OnMouseWheel(viewport,-1);assert(draft.treeScroll==32)
 draft:Select('button-5-2-icon');tick();assert(draft.treeScroll>32,'deep selections scroll into view')
-click('Preview');tick()
+draft:SetWorkspace('preview');tick()
 assert(draft.workspaceView=='preview' and not visible('HIERARCHY · '..#draft:VisibleTree()..' / '..#draft.nodes) and not visible('Width'),'preview can use the entire workspace')
 local target=preview.Nodes:get('button-1-1');assert(target.kind=='Frame' and not target.attributes,'preview stays unprotected')
 local picker
@@ -103,10 +105,10 @@ assert(picker and picker.template==nil,'preview hit target has no secure templat
 local old=preview
 picker.scripts.OnClick(picker);assert(draft.selected=='button-1-1' and preview==old,'preview selection waits until its native click returns')
 tick();assert(old.Nodes.size==0 and picker.scripts.OnClick==nil and not picker.shown,'preview replacement releases selection overlays')
-click('Inspector');tick();assert(visible('Properties') and visible('Width'),'inspector focus shows selected settings')
+draft:SetWorkspace('inspector');tick();assert(visible('Properties') and visible('Width'),'inspector focus shows selected settings')
 local presentation=editor.require('NodePresentation').describeNode(nil,draft,draft.Selected)
 assert(presentation.title=='Spell 20274' and presentation.texture==20274,'known spell identity and icon replace technical IDs')
-click('Design');tick();draft:Select('root');tick()
+click('Restore');tick();draft:Select('root');tick()
 input('220'):SetText('247');click('Save');tick()
 assert(LumaUI.Presets:Get(document.id).root.props.width==247 and not draft.dirty,'one Save commits typed props and the live component')
 input('247'):SetText('-5');click('Save');tick()
@@ -119,6 +121,9 @@ local source=draft.sourceEditor
 source:Open();source:Type('mana');source.name='ux.mana';source.values.unit='player';source.inputs:clear()
 click('Save');tick();assert(LumaUI.Presets:Get(document.id).sources[#LumaUI.Presets:Get(document.id).sources].name=='ux.mana','Save includes pending source edits')
 draft:BindSource('ux.mana','source');tick()
+draft.propertyEditor:Ensure();draft.propertyEditor.values.width='181';draft.propertyEditor.inputs:clear();draft.propertyEditor.binding='source';draft.propertyEditor:Bind('ux.mana');tick()
+assert(draft.propertyEditor.values.width=='181','changing a visual source retains unfinished values in other fields')
+draft.propertyEditor.values.width='180';draft.propertyEditor.inputs:clear();assert(draft.propertyEditor:Save());tick()
 draft.propertyEditor:Ensure();draft.propertyEditor.bindingPath='progress';draft.propertyEditor.inputs:clear();click('Save');tick()
 local bar=draft.selected
 local saved=LumaUI.Presets:Get(document.id)
@@ -131,17 +136,20 @@ input('180'):SetText('207');click('Back')
 assert(find(LumaUI.Presets:Get(document.id).root,bar).props.width==180,'Back keeps typed changes in the draft without saving the live component')
 click('Visual Editor');assert(input('207'),'returning to the editor retains unfinished text input')
 click('Save');tick();assert(find(LumaUI.Presets:Get(document.id).root,bar).props.width==207,'retained typed input can be saved after returning')
-click('Back');assert(visible('CUSTOMIZE') and visible('New spell list'),'Back returns to the library and its create actions')
+click('Back');assert(visible('CUSTOMIZE') and visible('New'),'Back returns to the library and its create actions')
 source:Open('ux.mana');source.values.unit='target';source.inputs:clear()
-click('New spell list');assert(draft.documentId=='collection-1' and draft.nodes[1].kind=='foreach' and visible('LumaUI / Editor'),'library creates a fresh editor draft')
-assert(not LumaUI.Presets:Get('collection-1'),'creating a draft does not install it')
+click('New');assert(draft.documentId=='component-1' and draft.nodes[1].kind=='fragment' and visible('LumaUI / Editor'),'library creates a fresh editor draft')
+assert(not LumaUI.Presets:Get('component-1'),'creating a draft does not install it')
 assert(not draft.sourceEditor.HasChanges and #draft.sources==0,'a new component cannot inherit an unfinished source form')
-click('Save');tick();assert(LumaUI.Presets:Get('collection-1').root.type=='foreach','one Save installs an explicitly created component')
+assert(not visible('New party') and not visible('New raid') and not visible('New spell list') and not visible('New headless'),'only generic creation is exposed')
+click('Save');tick();assert(LumaUI.Presets:Get('component-1').root.type=='fragment' and LumaUI.Presets:IsHeadless(LumaUI.Presets:Get('component-1')),'an empty generic component is naturally headless')
+draft:Add('foreach');tick()
+assert(draft.sources[1].type=='list' and #draft.sources[1].props.items==0,'Repeat does not install a party source')
 draft.propertyEditor:Ensure();draft.propertyEditor.itemsExpression='KnownSpells("Seal*")';draft.propertyEditor.inputs:clear();click('Save');tick()
-assert(LumaUI.Presets:Get('collection-1').root.items=='KnownSpells("Seal*")','one Save commits a typed list expression')
+assert(LumaUI.Presets:Get('component-1').root.children[1].items=='KnownSpells("Seal*")','one Save commits a typed list expression')
 local gap=draft.Selected.props.gap
 draft.propertyEditor.itemsExpression='Unknown("x")';draft.propertyEditor.values.gap='13';draft.propertyEditor.inputs:clear();click('Save');tick()
-assert(LumaUI.Presets:Get('collection-1').root.items=='KnownSpells("Seal*")' and draft.Selected.items=='KnownSpells("Seal*")' and draft.Selected.props.gap==gap,'invalid list expressions cannot partially replace saved props or bindings')
+assert(LumaUI.Presets:Get('component-1').root.children[1].items=='KnownSpells("Seal*")' and draft.Selected.items=='KnownSpells("Seal*")' and draft.Selected.props.gap==gap,'invalid list expressions cannot partially replace saved props or bindings')
 
 
 -- The component ribbon shows only what fits, and filters locally without replacing its input.

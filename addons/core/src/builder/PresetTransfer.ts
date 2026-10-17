@@ -1,4 +1,5 @@
 import { Encoding } from "wuira";
+import { clickCastTraits } from "./ClickCastTraits";
 import type { BuilderDocument, CollectionKeybinding, LumaCoreAPI, PresetDocument, PresetNode, ClickCastPresetDocument } from "../core/contract";
 import { stripBindings } from "./CollectionBindings";
 import { validateAssignments } from "./BindingTransfer";
@@ -12,9 +13,10 @@ export type BindingImportPolicy = "replace" | "none" | "skip";
 /** Optional sharing metadata is decoded separately and committed through the binding API. */
 export class PresetTransfer {
     public constructor(private readonly core: LumaCoreAPI) {}
-    public Export(document: BuilderDocument, includeBindings = false, supplied: readonly ClickCastPresetDocument[] = []): string {
+    public Export(document: BuilderDocument, includeBindings = false, supplied: readonly ClickCastPresetDocument[] = [], includeClickCast = true): string {
         if (document.kind === "skin") return this.core.Skins.Export(document);
         const data = this.core.Presets.Validate(document); stripBindings(data);
+        if (!includeClickCast) this.OmitClickCast({ document: data, bindings: [] });
         const ids = this.ClickCastIds(data);
         const available = new Map(ids.length === 0 ? [] : [...this.core.ClickCastPresets.List(), ...supplied].map(preset => [preset.id, preset]));
         const clickCastPresets = ids.map(id => { const preset = available.get(id); if (preset === undefined) fail("missing Click Cast preset: " + id); return this.core.ClickCastPresets.Validate(preset); });
@@ -22,6 +24,19 @@ export class PresetTransfer {
         if (clickCastPresets.length > 0) return "!LUMA:3!" + Encoding.Encode({ version: 1, document: data, bindings, clickCastPresets });
         if (!includeBindings) return this.core.Presets.Export(data);
         return "!LUMA:2!" + Encoding.Encode({ version: 1, document: data, bindings });
+    }
+    /** Remove custom references with omitted metadata; standard unit actions remain available. */
+    public OmitClickCast(transfer: TransferPayload): void {
+        if (transfer.document.kind !== "preset") return;
+        for (const document of [transfer.document, ...transfer.document.dependencies ?? []]) {
+            const visit = (node: PresetNode) => {
+                if (node.type === "secureButton" && typeof node.props.clickCastPreset === "string" && node.props.clickCastPreset !== "standard")
+                    node.props.clickCastPreset = "standard";
+                for (const child of node.children ?? []) visit(child);
+            };
+            visit(document.root);
+        }
+        transfer.clickCastPresets = undefined;
     }
     private ClickCastIds(document: PresetDocument): string[] {
         const ids = new Set<string>();
@@ -35,12 +50,21 @@ export class PresetTransfer {
     public PrepareClickCast(transfer: TransferPayload): void {
         if (transfer.document.kind !== "preset" || transfer.clickCastPresets === undefined) return;
         if (InCombatLockdown()) fail("import Click Cast presets after combat");
-        const equivalent = (a: ClickCastPresetDocument, b: ClickCastPresetDocument) => a.name === b.name && a.bindings.length === b.bindings.length && a.bindings.every((binding, index) => { const other = b.bindings[index]; return binding.key === other.key && binding.spellId === other.spellId && binding.itemId === other.itemId && binding.macro === other.macro; });
+        const equivalent = (a: ClickCastPresetDocument, b: ClickCastPresetDocument) => {
+            const left = this.core.ClickCastPresets.Validate(a), right = this.core.ClickCastPresets.Validate(b);
+            return left.name === right.name && left.bindings.length === right.bindings.length && left.bindings.every((binding, index) => {
+                const other = right.bindings[index], first = clickCastTraits(binding.traits), second = clickCastTraits(other.traits);
+                return binding.key === other.key && binding.spellId === other.spellId && binding.itemId === other.itemId
+                    && binding.macro === other.macro && binding.targeting === other.targeting
+                    && first.friendly === second.friendly && first.enemy === second.enemy
+                    && first.nodead === second.nodead && first.clearTargeting === second.clearTargeting;
+            });
+        };
         const saved = this.core.ClickCastPresets.List();
         const mapping = new Map<string, string>();
         for (const preset of transfer.clickCastPresets) {
             const same = saved.find(candidate => equivalent(candidate, preset));
-            const imported = same ?? this.core.ClickCastPresets.Create(preset.name, preset.bindings);
+            const imported = same ?? this.core.ClickCastPresets.Create(preset.name, preset.bindings, preset.traits);
             mapping.set(preset.id, imported.id); if (same === undefined) saved.push(imported);
         }
         for (const entry of [transfer.document, ...transfer.document.dependencies ?? []]) {

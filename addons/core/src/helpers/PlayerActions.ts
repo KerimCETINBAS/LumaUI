@@ -72,7 +72,7 @@ export class PlayerActionCollection implements PlayerActionList {
             let consumable = false;
             if (!equipped && C_Item.GetItemInfoInstant !== undefined) { const [, , , , , classId] = C_Item.GetItemInfoInstant(id); consumable = !issecretvalue(classId) && classId === 0; }
             const icon = C_Item.GetItemIconByID?.(id);
-            next.push({ key: "item:" + id, category: consumable ? "consumable" : "item", name, detail: effect, icon: readableId(icon) ? icon : undefined, action: { itemId: id } });
+            next.push({ key: "item:" + id, category: consumable ? "consumable" : "item", name, detail: effect, equipped, icon: readableId(icon) ? icon : undefined, action: { itemId: id } });
         };
         try { if (GetInventoryItemID !== undefined) for (let slot = 1; slot <= 19; slot++) addItem(GetInventoryItemID("player", slot), true); } catch { /* A restricted native section does not discard readable spells. */ }
         try {
@@ -104,7 +104,7 @@ export class PlayerActionCollection implements PlayerActionList {
             }
         } catch { /* A missing macro API leaves the other categories usable. */ }
         next.sort((a, b) => a.category < b.category ? -1 : a.category > b.category ? 1 : a.name < b.name ? -1 : a.name > b.name ? 1 : a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
-        const same = next.length === this.snapshot.length && next.every((item, index) => { const old = this.snapshot[index]; return item.key === old.key && item.name === old.name && item.detail === old.detail && item.icon === old.icon && item.category === old.category; });
+        const same = next.length === this.snapshot.length && next.every((item, index) => { const old = this.snapshot[index]; return item.key === old.key && item.name === old.name && item.detail === old.detail && item.icon === old.icon && item.category === old.category && item.equipped === old.equipped; });
         if (same) return;
         const slots = this as unknown as PlayerAction[];
         for (let index = next.length; index < this.snapshot.length; index++) slots[index] = undefined!;

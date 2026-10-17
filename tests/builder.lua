@@ -22,6 +22,54 @@ local function doc()
   {id='b',type='progress',source='health',props={width='inherit',height=24}}
  }}}
 end
+
+local chosenAction={version=1,kind='preset',id='chosen-action',name='Chosen action',sources={{name='chosen',type='spell',props={spellId=19750}}},root={id='button',type='secureButton',source='chosen',props={width=24,height=24,action={type='spell',spell=635}}}}
+local chosen=presets:Mount(chosenAction)
+assert(chosen.Nodes:get('button').attributes.spell1=='Spell 19750','a selected action source overrides the preserved static fallback')
+chosen:Dispose();chosenAction.root.source=nil
+chosen=presets:Mount(chosenAction)
+assert(chosen.Nodes:get('button').attributes.spell1==635,'switching back to static restores the original action')
+chosen:Dispose()
+
+
+-- Existing saved action buttons receive native tooltips without a preset migration.
+local oldTooltip,oldInfo=GameTooltip,C_Spell.GetSpellInfo
+GameTooltip={shown=false,SetOwner=function(self,owner)self.owner=owner end,IsOwned=function(self,owner)return self.owner==owner end,
+ ClearLines=function(self)self.spell=nil;self.item=nil;self.link=nil;self.action=nil;self.text=nil end,
+ SetSpellByID=function(self,id)self.spell=id end,SetItemByID=function(self,id)self.item=id end,
+ SetHyperlink=function(self,link)self.link=link end,SetAction=function(self,id)self.action=id end,SetUnit=function(self,unit)self.unit=unit end,
+ SetText=function(self,text)self.text=text end,Show=function(self)self.shown=true end,Hide=function(self)self.shown=false end}
+C_Spell.GetSpellInfo=function(spell)return {spellID=tonumber(tostring(spell):match('%d+'))} end
+local function hover(frame,event)for _,hook in ipairs(frame.hooks and frame.hooks[event or 'OnEnter'] or {})do hook(frame)end end
+local tipDoc={version=1,kind='preset',id='action-tip',name='Action tooltip',sources={{name='spell',type='spell',props={spellId=19750}}},
+ root={id='tip-button',type='secureButton',source='spell',props={width=24,height=24,action={type='spell',spell=635}}}}
+local tip=presets:Mount(tipDoc);local button=tip.Nodes:get('tip-button')
+hover(button)
+assert(GameTooltip.shown and GameTooltip.spell==19750,'bound spell action tooltip wins over its static fallback')
+combat=true;hover(button);assert(GameTooltip.spell==19750,'native hover tooltip does not mutate protected actions during combat');combat=false
+hover(button,'OnLeave');assert(not GameTooltip.shown)
+tip:Dispose()
+tipDoc.root.source=nil;tipDoc.root.props.action={type='item',item=3385}
+tip=presets:Mount(tipDoc);button=tip.Nodes:get('tip-button');hover(button)
+assert(GameTooltip.item==3385,'item actions route to native item tooltips')
+tip:Dispose();assert(not GameTooltip.shown,'unmount hides a tooltip owned by that button')
+tipDoc.root.props.action={type='item',item='item:3385'}
+tip=presets:Mount(tipDoc);hover(tip.Nodes:get('tip-button'));assert(GameTooltip.link=='item:3385');tip:Dispose()
+tipDoc.root.props.action={type='action',slot=4}
+tip=presets:Mount(tipDoc);hover(tip.Nodes:get('tip-button'));assert(GameTooltip.action==4);tip:Dispose()
+tipDoc.root.props.showTooltip=false
+tip=presets:Mount(tipDoc);hover(tip.Nodes:get('tip-button'));assert(not GameTooltip.shown,'per-button tooltip opt-out is respected');tip:Dispose()
+tipDoc.root.props.showTooltip=nil
+local sample=presets:Preview(tipDoc);sample.Frame=registry.require('lua_modules.wuira.lib.index').wuira:Mount(sample.View)
+hover(sample.Nodes:get('tip-button'));assert(not GameTooltip.shown,'preview does not expose live action tooltip handlers');sample:Dispose()
+local actions=presets:Validate(testBuiltinDocument('PaladinActions'))
+assert(actions.id=='action-bars' and actions.dependencies[1].id=='hide-action-bars','action bar is an ordinary importable document with a headless dependency')
+actions.enabled='always'
+local actionInstance=presets:Mount(actions)
+assert(actionInstance.Nodes:get('spell-20271'),'the saved hotbar layout uses the same generic runtime as every component')
+actionInstance:Dispose()
+GameTooltip=oldTooltip;C_Spell.GetSpellInfo=oldInfo
+
 local playerDocument=testBuiltinDocument('PlayerResources')
 playerDocument.root.props.x=11;playerDocument.root.props.y=22
 assert(presets:Validate(playerDocument).root.props.x==11,'player starter is a preset document')
@@ -161,6 +209,10 @@ local replacement=presets:Mount(effect);assert(effects==2 and releases==1);effec
 combat=true;replacement:Dispose();assert(releases==1);combat=false;emit('PLAYER_REGEN_ENABLED');assert(releases==2)
 local broken=headless('broken','fragment');broken.root.children={{id='ok',type='effectTest',props={}},{id='bad',type='failingEffect',props={}}}
 assert(not pcall(function() presets:Mount(broken) end) and effects==3 and releases==3,'failed activation releases previous effects')
+local legacyBars=headless('legacy-bars','hideActionBars')
+local normalized=presets:Validate(legacyBars)
+assert(normalized.root.type=='hideUnitFrame' and normalized.root.props.unit=='actionBars' and normalized.root.id==legacyBars.root.id and legacyBars.root.type=='hideActionBars','legacy native-bar effects migrate without mutating input or IDs')
+for _,kind in ipairs(presets:ComponentTypes())do assert(kind~='hideActionBars','there is one native-frame hiding factory')end
 PlayerFrame=CreateFrame('Frame',nil,UIParent)
 local hide=headless('hide-native','hideUnitFrame');hide.root.props.unit='player'
 local hidePreview=presets:Preview(hide);assert(PlayerFrame:GetParent()==UIParent);hidePreview:Dispose()
@@ -245,3 +297,9 @@ fresh.Presets:Save(edited,false);fresh.Presets:Restore()
 assert(fresh.Presets:Get('player').root.props.width==333 and fresh.Presets:ActivationStatus('player')=='Disabled','saved geometry and manual disable survive reconciliation')
 assert(PlayerFrame:GetParent()==originalParent,'an inactive imported replacement leaves the native frame visible')
 print('Builder runtime checks passed')
+
+-- Fixed-unit built-ins pass the generic document validator.
+for _,key in ipairs({'PlayerUnitFrame','TargetUnitFrame'}) do
+ local document=presets:Validate(testBuiltinDocument(key))
+ assert(document.root.type=='secureButton' and document.root.props.unitWatch)
+end

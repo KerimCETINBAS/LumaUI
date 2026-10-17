@@ -4,17 +4,92 @@ All notable changes to the LumaUI addon suite are recorded here. Core and Editor
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-17
+
+### Fixed
+
+- Target UnitSource emits identity invalidations on PLAYER_TARGET_CHANGED; dependent HP, text and unit displays refresh without invalidating unrelated unit sources or rewriting secure unit attributes.
+
+- Library thumbnails use source-free static snapshots and guard secret measurements, avoiding live health/power conversions while preserving saved components.
+
+### Added
+
+- Compact read-only previews between UI Library card headings and actions, with No visual placeholders for headless components and native skins.
+
+- Per-instance component activation overrides and empty typed source inputs exposed from Sources. Reference inspectors connect existing parent SourceInstances without constructing or owning a second datasource; unbound optional inputs omit dependent visuals.
+- Name-derived identities for new/renamed components, optional Yes/No reference rewrites, numbered duplicate names and an optional import name field. Missing references remain editable; character keybindings move with the renamed component.
+
+- Import copy creates a separate component with a unique ID, preserving existing components and reusing equivalent Click Cast presets.
+
+- Built-in Player and Target unit-frame import strings cloned from the party member cell, with independent fixed-unit sources, identical styling/click presets and secure unit-watch visibility. No hardcoded component or automatic import.
+
+- Opt-in read-only `/luma secureplates start|report|stop` client audit for combat-time
+  nameplate creation and identity reuse. Secure nameplate actions remain unverified;
+  the audit does not cast spells or modify native/secure frames.
+
+- Dynamic `BlizzardElement` skin primitive and serializable `blizzardElement` factory
+  with exclusive Apply/Replace operations, per-nameplate unit/source scopes and
+  independently owned Wuira rules. Add checked `UnitToBool` helpers and editable
+  `unitToBool` converter sources. The editor supports filter selection and mode changes;
+  preview never registers native rules. Requires Wuira 0.2.7.
+- Mock Lua integration and JSX type coverage for nameplate factories, unit filtering,
+  recycling, subscription cleanup, rollback, secure-template rejection and editor Undo.
+
+- Native action tooltips on saved/source-backed SecureButtons, enabled by default and configurable per button.
+- Optional Paladin action-bar import string with its headless native-bar dependency; no runtime layout constructor or character bindings.
+
+- Include the repository MIT license in every addon build and deployment; release validation verifies the shipped license.
+
+- Shared unlock handles for visible native Edit Mode systems and common Blizzard frames, with scale-aware dragging, character/layout position storage, combat deferral and restoration on reset.
+
+- Focus-to-capture Click Cast binding inputs with readable mouse labels, modifier capture, Escape cancellation and Delete/Backspace clearing.
+
+- Per-binding Click Cast targeting modes: Direct secure action or guarded Mouseover macro, with independent Friendly/Enemy, Living only and Clear targeting controls. Existing preset-level target preferences migrate into binding rows and survive sharing.
+
+- Scrollable source cards with separators, inline converter fields and atomic staging of multiple source forms.
+- Appearance inputs choose static values or source/path bindings in place; visibility, text, icons and progress sources live beside their visual values.
+
+- Shared Click Cast preset target traits: friendly/enemy unit restrictions and explicit clicked-unit spell/item targeting, preserved by import/export.
+- Generic static list source with validated stable record keys for repeated templates.
+
+- Automatic import validation with inline errors, a red invalid-input border and read-only previews for visual components. Transfer dialogs use an opaque background above the configuration window.
+- Independent Click Cast preset inclusion switches for import and export; omitted custom bindings fall back to standard unit actions.
+
+- Shared core Preview component for the editor and read-only import previews, with zoom, 1:1 and Fit controls that leave saved geometry untouched.
+- Local panel expansion/restore controls and a central Preview/Component/Sources workspace, replacing the global focus row and inspector-level tabs.
+- Bounded session undo/redo for component edits and deleted subtrees, with a live unsaved-changes indicator.
+
+- Editable LumaUI case and math converter factories powered by wuira’s generic callback SourceConverter. Configure input sources, value paths, typed case outputs, defaults and arithmetic formulas in Sources.
+- Generic property source bindings for background, border, progress color and opacity. Migrate retired class color flags into editable source data while preserving native secure button behavior.
+
+- Searchable spell fields with real client names, ranks, icons and selected-item lists. Spell filters store IDs and return up to 48 matches per query.
+- Separate icon selection from wuira’s generated client icon catalog, preserving custom texture paths and native FileDataIDs.
+- Character action selection for SecureButtons from learned active spells, equipped on-use items and carried consumables. Search queries never become component data.
+
 ### Removed
+
+- Separate Hide bars tool and factory; native action bars are a target of Hide frame. Existing bar effects migrate without changing node IDs or restoration ownership.
+
+- Specialized party, raid, spell-list and headless creation entry points. The library exposes one New action beside Import; built-in examples remain available from Dashboard.
 
 - Retire the LumaUI.ActionBars workspace, addon and character-specific Paladin layout generator. Core and Editor now build and ship as the complete suite; action buttons remain ordinary editable components.
 
 ### Fixed
 
+- Replace the floating rectangular minimap launcher with a standard minimap-edge
+  icon. Use LibDBIcon when present, with a circular draggable fallback, click-to-open
+  behavior and persisted angular position. No other addon is required.
+
+- Retain unfinished native text fields, rename input, selected panels, zoom and edit history across combat; reopen the editor afterward without applying the draft.
 - Expose repeated lists and all registered visual elements in the editor. Allow adding and dragging into member templates and keep the selected component name visible.
 
 - Keep character keybindings in a separate collection/node registry. Editor Apply, stale imports, reloads and reapplying components cannot restore embedded default keys. Migrate existing saved bindings once, including explicit unbinding.
 
 ### Changed
+
+- Remove role icons from party/raid starter headings. Offline members display an editable gray OFFLINE panel in place of resources, driven by a shared connection source and ordinary alpha converters; secure actions remain intact.
+
+- Replace the party starter's left selection strip with a class-colored name heading that retains standard left/right-click actions. Existing saved components are unchanged; import the updated starter to use it.
 
 - Keep manual native slot clear/restore commands in the core, reusing existing character backups. Capture slots only on an explicit first clear request, with reload required before clearing. Release retired ActionBars ownership on saved/imported components while retaining their trees, activation rules and bindings.
 
@@ -46,6 +121,8 @@ All notable changes to the LumaUI addon suite are recorded here. Core and Editor
 - Pin wuira 0.2.4 from npm, including keyed ForEach rendering, shared unit references, native Edit Mode layouts and tooltip attachments.
 
 ### Added
+
+- Import copy creates a separate component with a unique ID, preserving existing components and reusing equivalent Click Cast presets.
 
 - LumaUI KnownSpells helpers with exact names, glob selectors, bounded regex matching, cached iterable collections and event subscriptions.
 - Generic ForEach item scopes and registered list expressions. Spell templates share an automatic current-item action/icon/cooldown source and retain native widgets by spell ID across learned-spell changes; combat changes wait.
@@ -92,6 +169,8 @@ All notable changes to the LumaUI addon suite are recorded here. Core and Editor
 ## [0.1.0] - 2026-10-15
 
 ### Added
+
+- Import copy creates a separate component with a unique ID, preserving existing components and reusing equivalent Click Cast presets.
 
 - Registered component/source factories and separate preset and native-skin runtimes.
 - UI Library with native CBOR/Deflate/Base64 import/export and character-persistent collections.

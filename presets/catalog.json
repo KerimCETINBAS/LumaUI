@@ -18,5 +18,20 @@
     "file": "blizzard.luma.txt",
     "name": "Blizzard presentation",
     "kind": "skin"
+  },
+  "PaladinActions": {
+    "file": "paladin-actions.luma.txt",
+    "name": "Paladin · Action bars",
+    "kind": "preset"
+  },
+  "PlayerUnitFrame": {
+    "file": "player-unit-frame.luma.txt",
+    "name": "Player frame · Party template",
+    "kind": "preset"
+  },
+  "TargetUnitFrame": {
+    "file": "target-unit-frame.luma.txt",
+    "name": "Target frame · Party template",
+    "kind": "preset"
   }
 }
