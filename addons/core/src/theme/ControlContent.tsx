@@ -1,4 +1,4 @@
-import { UI } from "wuira";
+import { UI } from "wuira/ui";
 import { Cell, FlowLayout } from "wuira/ui";
 import type { LabelProps } from "wuira/ui";
 import { darkTheme } from "./dark";

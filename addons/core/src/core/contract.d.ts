@@ -1,6 +1,6 @@
 import type { PresetAPI, SkinAPI, BuilderDocument, PresetDocument, ClickCastLibraryAPI, StandardClickPreset, LumaHelpers } from "./builder";
 export type * from "./builder";
-import type { Cell } from "wuira";
+import type { Cell } from "wuira/ui";
 import type { StoreRegistry } from "wuira/store";
 export type EditMode = "locked" | "unlock" | "keys";
 interface Color { readonly r: number; readonly g: number; readonly b: number; readonly a: number; }

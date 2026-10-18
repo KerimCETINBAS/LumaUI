@@ -9,6 +9,7 @@ export const IconTextures = {
     "button": "Interface\\AddOns\\LumaUI\\media\\icons\\button.tga",
     "cell": "Interface\\AddOns\\LumaUI\\media\\icons\\cell.tga",
     "check": "Interface\\AddOns\\LumaUI\\media\\icons\\check.tga",
+    "chevron-down": "Interface\\AddOns\\LumaUI\\media\\icons\\chevron-down.tga",
     "close": "Interface\\AddOns\\LumaUI\\media\\icons\\close.tga",
     "collapse": "Interface\\AddOns\\LumaUI\\media\\icons\\collapse.tga",
     "component": "Interface\\AddOns\\LumaUI\\media\\icons\\component.tga",

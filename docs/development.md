@@ -68,7 +68,7 @@ CurseForge submission and publishing are a separate preparation milestone; see [
 
 Inspector spell lists are generated from the packaged `wuira/data/spells/forever.json`; icon choices use `wuira/data/icons/forever.json`. LumaUI owns the search interface, while wuira owns extraction from the pinned Forever client tables and the generated enums. Normal builds use committed generated search data without network requests.
 
-The current dependency is published `wuira@0.2.6`. After upgrading the SDK, run `npm run catalogs:generate`. To validate an unreleased SDK, each generator accepts `--package <directory>` pointing to an extracted npm package.
+The current dependency is published `wuira@0.3.0`. After upgrading the SDK, run `npm run catalogs:generate`. To validate an unreleased SDK, each generator accepts `--package <directory>` pointing to an extracted npm package.
 
 ## Source conversion
 

@@ -2,7 +2,7 @@
 
 Optional in-game visual component editor for LumaUI, built with wuira.
 
-Create a component in **UI Library** using **New** beside **Import component**. Every component starts with an empty root group; add visual layouts or headless effects through the same toolbox. Use a saved component's **Edit** action to open it. Import and Export belong to the library.
+Create a component in **UI Library** using **New** beside **Import component**. New drafts start with an empty hierarchy. The first element you choose becomes the root; no Cell, group or component is inserted automatically. Add visual layouts or headless effects through the same toolbox. Existing saved drafts and components keep their content. Use a saved component's **Edit** action to open it. Import and Export belong to the library.
 
 The editor occupies the full configuration content area, without the navigation sidebar. **Back** returns to the previous configuration page. **Design** shows the hierarchy, preview and inspector together; **Preview**, **Hierarchy** and **Inspector** focus that panel across the workspace. These preferences do not change component data.
 
@@ -22,10 +22,20 @@ Forms and option lists use native mouse-wheel scrolling, with no previous/next p
 
 **Component** configures Condition met, Always or Never, player class, group condition and native Edit Mode layout. Unlock positions remain scoped to the active native layout.
 
-To build party or raid frames, add **ForEach**, create a **Group members** source in Sources, and bind it to the list. Add visuals inside that template, using **$unit** in sources and **$pet** for its pet. A new ForEach starts with an empty generic static list; it does not choose a party or spell source. The runtime derives members from the roster and retains unchanged Cells by GUID. An optional second template represents party pets.
+To build party or raid frames, add **Repeat** (ForEach), create a **Group members** source in Sources, and bind it to the list. Repeat contains component references only; its optional second component slot represents pets. Select a slot and use **Edit component definition** to edit the child in its own scope. Expose a named **UnitSource** input in the child Sources, then use that name in the child's local HP/Mana and unit fields. Back in the parent, select the reference and connect the input to **parent.$unit** under **Inspector > Data**. The runtime retains unchanged instances by GUID and retargets their shared unit reference when roster slots move. Legacy inline templates migrate to editable child definitions.
 
-To build spell buttons, add **ForEach** and place a button/icon template inside it. In **Data > List helper**, use expressions such as `KnownSpells("Holy Light", "Seal*", /^Blessing of .*/i)`. Choose **Current item** as the template's action, icon or text source. Stable spell keys are automatic.
+To build spell buttons, create a child component with an exposed **Repeat item** input (for example `Spell`), and bind its action, icon and text to that input. In the parent Repeat's **Data > List helper**, use expressions such as `KnownSpells("Holy Light", "Seal*", /^Blessing of .*/i)`. Connect the child input to **parent.$item** in its Data tab. Stable spell keys and consumer cleanup are automatic. Other source inputs can receive any compatible parent source, including a ready health source, list or converter output.
+
+Sources cards include **Rename source**. Enter the new public name, then choose **Yes** to rewrite references or **No** to keep old references as missing links. Public input changes update caller binding names on Save. Undo/Redo includes the rename and its pending caller updates. No input declaration allocates a source; borrowed instances remain owned by the parent, while child-derived sources are disposed with the child. Incomplete connections remain editable and do not fall back to player data.
 
 Tools, hierarchy entries and common controls share editable SVG glyphs from `addons/core/assets/icons/svg`. The build converts them to transparent native TGA textures and includes them in the core addon; feature addons use `LumaUI.Theme.icons`. Run `npm run icons:preview` to inspect the set.
 
 Development is managed from the monorepo root: `npm ci`, `npm run check`, `npm run build`, `npm test`, and `npm run test:integration`. Run `npm run deploy` to install the addons into the configured local game directory.
+
+Repeat starts without a named `items` source and stays empty until a list source or helper is selected. Its default child exposes an `Item: Repeat item` input connected to `parent.$item`. For an existing child, expose your own named input in its Sources panel, then select the child reference and open **Data**. Choose a compatible source or type `parent.$item` / `VisibleRepeatName.$item` in the text field; **Apply connection** and the main **Save** both commit it. The named form must match the creating Repeat's visible name; outer or sibling Repeat contexts are rejected. Each row reuses its own item instance and updates subscribers when its keyed record changes.
+
+For roster HP/Mana/class data, expose a **UnitSource** input and derive these sources locally. Connect that input to `parent.$unit` (or `parent.$item`, which also carries the roster unit). A **Unit class** input expects an already derived class source and rejects a raw item. Old generated empty `items` list placeholders used only by Repeat migrate to an unconfigured Repeat; configured, shared and exposed lists remain intact.
+
+Existing exposed inputs have a type selector in Sources. Change the type and **Update source** to repair a contract (for example, MEMBER from Unit class to UnitSource); callers remain subject to compatibility validation.
+
+Rejected manual source connections restore the last accepted field value while keeping the explanation beside the input. Other pending edits are retained. You can retry, dismiss the error, change selection or use Undo without repeatedly submitting the same rejected text. Type mismatch messages distinguish a missing Repeat context from an incompatible input contract.

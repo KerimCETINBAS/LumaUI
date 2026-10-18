@@ -9,7 +9,7 @@ restoration. Luma owns matching conditions and authored templates.
 Given the existing Luma core API as `Core`:
 
 ```tsx
-import { UI } from "wuira";
+import { UI } from "wuira/ui";
 import { HP } from "wuira/datasources";
 
 const { BlizzardElement } = Core.Skins;

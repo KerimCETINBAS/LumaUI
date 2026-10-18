@@ -41,7 +41,7 @@ do
  LumaUI.Presets:Delete(document.id);library:Delete(preset.id);library:Delete(another.id)
  assert(LumaUI.StandardClickPreset.immutable and LumaUI.StandardClickPreset.actions[2].action=='togglemenu')
  local Registry=master.require('lua_modules.wuira.lib.store.index').StoreRegistry
- local Library=master.require('builder.ClickCastLibrary').ClickCastLibrary
+ local Library=master.require('builder.clickcast.ClickCastLibrary').ClickCastLibrary
  _G.LumaClickCastTestSettings={['lumaui.click-cast-library']={nextId=9,presets={{version=1,kind='clickCast',id='old',name='Old healer',key='shift-ctrl-button1',spellId=635}}}}
  local registry=new(Registry,{addon='LumaUI',variable='LumaClickCastTestSettings'})
  local migrated=new(Library,registry,function() end,function() return false end)
@@ -59,7 +59,7 @@ do
  -- Render the real page with a small refresh host, including native text boxes.
  local page,view,needsRefresh
  local fake=setmetatable({RegisterPage=function(_,value) page=value end,RefreshCustomization=function() needsRefresh=true end},{__index=LumaUI})
- master.require('builder.ClickCastLibraryView').installClickCastLibrary(nil,fake)
+ master.require('builder.clickcast.ClickCastLibraryView').installClickCastLibrary(nil,fake)
  local wuira=master.require('lua_modules.wuira.lib.index').wuira
  local function render()
   if needsRefresh==false then return end

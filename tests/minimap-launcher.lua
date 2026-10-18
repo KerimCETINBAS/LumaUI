@@ -1,5 +1,5 @@
 local registry=__wuiraModules_LumaUI
-local install=registry.require('MinimapLauncher').installMinimapLauncher
+local install=registry.require('shell.MinimapLauncher').installMinimapLauncher
 math.atan2=math.atan2 or function(y,x)return math.atan(y,x)end
 local clicks,saved=0,nil
 local function open()clicks=clicks+1 end

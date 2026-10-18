@@ -17,7 +17,7 @@ C_EncodingUtil={SerializeCBOR=function(v) payloads[#payloads+1]=v;return tostrin
 __LOAD_BUNDLES__
 local master,editor=__wuiraModules_LumaUI,__wuiraModules_LumaUI_Editor
 local controls
-local controlsClass=master.require('builder.CollectionControls').CollectionControls
+local controlsClass=master.require('builder.collections.CollectionControls').CollectionControls
 local constructControls=controlsClass.prototype.____constructor
 controlsClass.prototype.____constructor=function(self,...) constructControls(self,...);controls=self end
 local slotCaptures,slotClears,slotRestores=0,0,0
@@ -39,7 +39,7 @@ master.require('index')
 assert(#LumaUI.Presets:List()==0 and #LumaUI.ClickCastPresets:List()==0,'startup never seeds saved UI or mappings')
 -- Tests install the same wire assets as an explicitly confirmed import.
 local function importBuiltin(core,registry,key)
- local transfer=new(registry.require('builder.PresetTransfer').PresetTransfer,core)
+ local transfer=new(registry.require('builder.transfer.PresetTransfer').PresetTransfer,core)
  local payload=transfer:Decode(assert(core.BuiltinPresets[key]),'preset')
  transfer:PrepareClickCast(payload)
  return payload.document
@@ -120,7 +120,7 @@ LumaUI.Presets:Mount(hotbar);LumaUI.Presets:Save(hotbar,true)
 LumaUI.Presets:Restore()
 assert(LumaUI.Presets:Get('action-bars').root.props.width==260,'hotbar is not regenerated')
 local draft
-local draftClass=editor.require('Draft').EditorDraft
+local draftClass=editor.require('draft.Draft').EditorDraft
 local constructDraft=draftClass.prototype.____constructor
 draftClass.prototype.____constructor=function(self,...) constructDraft(self,...);draft=self end
 local lastPreview
@@ -166,7 +166,7 @@ local function hierarchyViewport()
 end
 local function hierarchyRow(id)
  local node=draft.nodes[1];for _,entry in ipairs(draft.nodes) do if entry.id==id then node=entry;break end end
- local name=editor.require('NodePresentation').describeNode(nil,draft,node).title
+ local name=editor.require('chrome.NodePresentation').describeNode(nil,draft,node).title
  for i=#nativeFrames,1,-1 do
   local f=nativeFrames[i]
   if f.fontString and f.fontString.text==name then
@@ -211,7 +211,7 @@ local beforeClick=#nativeFrames
 local clicked=false
 for i=#nativeFrames,1,-1 do
  local f=nativeFrames[i]
- if f.fontString and f.fontString.text==editor.require('NodePresentation').describeNode(nil,draft,(function() for _,node in ipairs(draft.nodes) do if node.id=='healthBar' then return node end end end)()).title then
+ if f.fontString and f.fontString.text==editor.require('chrome.NodePresentation').describeNode(nil,draft,(function() for _,node in ipairs(draft.nodes) do if node.id=='healthBar' then return node end end end)()).title then
   local parent=f.parent
   while parent and parent~=UIParent do
    if parent.shown and parent.scripts and parent.scripts.OnClick then parent.scripts.OnClick(parent);clicked=true;break end
@@ -265,7 +265,7 @@ LumaUI:EditPreset(LumaUI.Presets:Get('action-bars'))
 assert(draft:Document().owner==nil and find(draft:Document().root,'spell-20216').alphaSource=='pending-20216','editor keeps the aura binding without a retired addon owner')
 tick()
 assert(lastPreview.Nodes:get('spell-20216').kind=='Frame','action preview has no secure button template')
-draft:New();draft:Add('progress');draft:UseResource('mana');draft:Apply();tick()
+draft:New();draft:Add('cell');draft:Add('progress');draft:UseResource('mana');draft:Apply();tick()
 assert(draft.documentId=='component-1' and LumaUI.Presets:Get('component-1') and LumaUI.Presets:Get('player').root.props.width==250,'new independent collection')
 -- The source form stages changes, and the component inspector owns the binding.
 click('Sources');tick()
@@ -290,7 +290,7 @@ assert(nameInput,'new source has a name input');nameInput:SetText('custom.hp');s
 click('Create source');tick()
 assert(sourceForm.original=='custom.hp' and #draft.sources==2,'new source is created and validated')
 click('Preview');tick();click('Display');tick()
-click('Source: player.mana v');click('custom.hp');tick()
+click('Source: player.mana');click('custom.hp');tick()
 assert(draft.Selected.source=='custom.hp','source dropdown binds the selected element: '..tostring(draft.Selected.source)..' / '..draft.message)
 local propForm=draft.propertyEditor
 propForm.values.width='200';propForm.inputs:clear();propForm:Save();tick()
@@ -301,7 +301,7 @@ propForm.values.width='-10';propForm.inputs:clear();propForm:Save();tick()
 assert(draft.Selected.props.width==200,'invalid property does not replace the working value')
 propForm:Open();propForm.values['foreground.color.r']='0.2';propForm.values['foreground.color.g']='0.3';propForm.values['foreground.color.b']='0.4';propForm.inputs:clear();propForm:Save();tick()
 assert(draft.Selected.props.foreground.color.g==.3,'nested appearance properties are editable')
-sourceForm:Open('player.mana');sourceForm.values.regenTimer='true';sourceForm.inputs:clear();sourceForm:Save();tick()
+sourceForm:Open('player.mana');sourceForm:Save();tick()
 propForm:Open();propForm.bindingPath='channels.regen';propForm.inputs:clear();propForm:Bind('player.mana');tick()
 assert(draft.Selected.source=='player.mana' and draft.Selected.sourcePath=='channels.regen','nested source path binds the mana timer')
 assert(draft:Document().root.children[1].sourcePath=='channels.regen','source path is serialized')
@@ -315,8 +315,8 @@ for key in pairs(LumaUI.Presets:ComponentProperties('progress')) do assert(seen[
 assert(LumaUI.Presets:ComponentProperties('flow').sizing and LumaUI.Presets:ComponentProperties('grid').cellWidth,'layout-specific properties are exposed')
 sourceForm:Open('custom.hp');sourceForm:Delete();tick()
 assert(#draft.sources==1,'unused sources can be deleted')
-local rules=LumaUI.Presets:SourceProperties('mana');rules.regenTimer.type='string'
-assert(LumaUI.Presets:SourceProperties('mana').regenTimer.type=='boolean','inspector schemas are detached')
+local rules=LumaUI.Presets:SourceProperties('mana');rules.unit.type='number'
+assert(LumaUI.Presets:SourceProperties('mana').unit.type=='string','inspector schemas are detached')
 draft:Apply();tick()
 assert(LumaUI.Presets:Get('component-1').root.children[1].sourcePath=='channels.regen','Apply persists source paths')
 -- Create a headless component from UI Library, then reuse it in an existing Cell.
@@ -330,7 +330,7 @@ assert(draft.Selected.props.unit=='target','headless properties are editable')
 draft:Apply();tick()
 assert(LumaUI.Presets:Get('component-2') and controls.active:get('component-2').instance.Frame==nil,'headless preset applies without a visual frame')
 LumaUI:EditPreset(LumaUI.Presets:Get('player'));tick()
-click('Components');tick();click('Component 2');tick()
+click('Components');draft.componentFilter='component-2';LumaUI:RefreshCustomization();tick();click('Component 2');tick();draft.componentFilter=''
 assert(draft.Selected.kind=='preset' and draft.Selected.preset=='component-2','component ribbon inserts a shared preset reference')
 assert((not lastPreview.View.children or #lastPreview.View.children==0) and lastPreview.View.child~=nil,'headless dependency does not consume the Cell visual child slot')
 draft:Apply();tick()
@@ -354,7 +354,7 @@ do
  emit('EDIT_MODE_LAYOUTS_UPDATED');tick()
  LumaUI:EditPreset(LumaUI.Presets:Get('component-1'));tick()
  draft:SetInspector('collection');tick()
- click('Any layout v');click('Raid [1]');tick()
+ click('Any layout');click('Raid [1]');tick()
  assert(draft.nativeLayout=='1::Raid' and draft:Document().layout=='1::Raid','native layout is chosen in the collection inspector')
  draft:UpdateActivation({enabled='condMet',class='PALADIN',condition='inParty'});tick()
  draft:Save();local activeDraft=draft;local restored=new(draftClass);draft=activeDraft
@@ -395,7 +395,7 @@ for key in pairs(_G) do if type(key)=='string' and key:sub(1,6)=='SLASH_' then _
 __LOAD_BUNDLES__
 master=__wuiraModules_LumaUI
 master.factories['lua_modules.wuira.lib.platform.ActionBars']=slotAPI
-controlsClass=master.require('builder.CollectionControls').CollectionControls
+controlsClass=master.require('builder.collections.CollectionControls').CollectionControls
 constructControls=controlsClass.prototype.____constructor
 controlsClass.prototype.____constructor=function(self,...) constructControls(self,...);controls=self end
 master.require('index')

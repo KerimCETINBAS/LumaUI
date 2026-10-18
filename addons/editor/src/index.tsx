@@ -1,7 +1,7 @@
-import { UI } from "wuira";
+import { UI } from "wuira/ui";
 import { Core } from "./core";
-import { EditorDraft } from "./Draft";
-import { EditorView } from "./EditorView";
+import { EditorDraft } from "./draft/Draft";
+import { EditorView } from "./view/EditorView";
 
 Core.Store.onReady(() => {
 

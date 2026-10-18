@@ -68,7 +68,7 @@ assert(prior.Nodes.size==0 and not visible('PREVIEW'),'editing disposes the stal
 click('Close')
 assert(not box.scripts.OnTextChanged and not box.onUpdate,'closing removes validation listeners')
 -- Click Cast metadata is optional in both directions, including nested references.
-local service=new(master.require('builder.PresetTransfer').PresetTransfer,LumaUI)
+local service=new(master.require('builder.transfer.PresetTransfer').PresetTransfer,LumaUI)
 local clickPreset={version=2,kind='clickCast',id='shared-cast',name='Shared cast',bindings={{key='BUTTON1',spellId=635},{key='SHIFT-BUTTON1',spellId=19750}}}
 local child={version=1,kind='preset',id='click-child',name='Child',sources={},root={id='unit',type='secureButton',props={width=24,height=24,unit='player',clickCastPreset=clickPreset.id}}}
 local shared={version=1,kind='preset',id='click-parent',name='Parent',sources={},dependencies={child},root={id='child',type='preset',preset=child.id,props={}}}
@@ -103,7 +103,7 @@ assert(not visible('Preview'),'import validates and previews without a Preview b
 assert(preview.Nodes:get('button').kind=='Frame' and not LumaUI.Presets:Get(document.id),'import preview is read-only and needs no editor addon')
 click('Import');assert(LumaUI.Presets:Get(document.id) and LumaUI.Presets:ActivationStatus(document.id)=='Disabled','Import saves only after confirmation')
 local draft
-local Draft=editor.require('Draft').EditorDraft
+local Draft=editor.require('draft.Draft').EditorDraft
 local construct=Draft.prototype.____constructor
 Draft.prototype.____constructor=function(self,...)construct(self,...);draft=self end
 editor.require('index');LumaUI:EditPreset(LumaUI.Presets:Get(document.id))
@@ -166,7 +166,7 @@ LumaUI:CloseCustomization();combat=true;emit('PLAYER_REGEN_DISABLED');combat=fal
 -- Inspector reference settings and exposed source forms round-trip independently.
 local reusable={version=1,kind='preset',id='reusable',name='Reusable',sources={{name='health',type='hp',props={}}},root={id='bar',type='progress',source='health',props={width=100,height=10}}}
 LumaUI.Presets:Save(reusable)
-local reuseDraft=new(editor.require('Draft').EditorDraft)
+local reuseDraft=new(editor.require('draft.Draft').EditorDraft)
 reuseDraft:Load(reusable);reuseDraft.sourceEditor:Open('health',false)
 reuseDraft.sourceEditor:Expose(true);reuseDraft.sourceEditor:SetOptional(true);assert(reuseDraft.sourceEditor:Save())
 local sourceInput=reuseDraft:Document().sources[1]
@@ -193,7 +193,7 @@ reuseDraft:ReplacePreset('renamed-purpose');assert(reuseDraft:Document().root.pr
 local constructors=0
 local stopThumbnailSource=LumaUI.Presets:RegisterSource('thumbnailForbidden',{properties={},Create=function()constructors=constructors+1;error('live source touched by thumbnail')end})
 local thumbnailDoc={version=1,kind='preset',id='static-thumbnail',name='Static thumbnail',sources={{name='live',type='thumbnailForbidden',props={}}},root={id='bar',type='progress',source='live',props={width=200,height=20}}}
-local thumbnailModule=master.require('builder.ComponentPreview')
+local thumbnailModule=master.require('builder.library.ComponentPreview')
 local static=thumbnailModule.thumbnailDocument(nil,thumbnailDoc,LumaUI.Presets)
 assert(#static.sources==0 and static.root.source==nil and static.root.props.current==75)
 local thumbnail=ui:Mount(thumbnailModule.ComponentThumbnail(nil,thumbnailDoc,180,76,LumaUI.Presets,LumaUI.Theme))
@@ -207,7 +207,7 @@ do
  UnitName=function(unit)if unit=='target'then return name end;return savedName and savedName(unit)end
  UnitHealth=function(unit)if unit=='target'then return health end;return savedHealth(unit)end
  UnitHealthMax=function(unit)if unit=='target'then return 1000 end;return savedMax(unit)end
- local widgets=master.require('builder.UnitWidgets')
+ local widgets=master.require('builder.units.UnitWidgets')
  local text=ui:Mount(widgets.unitText(nil,{width=100,height=20},'target','name',false))
  assert(text.fontString.text=='Target A')
  local targetSource=new(master.require('lua_modules.wuira.lib.datasources.UnitSource').UnitSource,'target')
@@ -215,7 +215,7 @@ do
  local observed
  local stopHP=hp:onChange(function(_,value)observed=value end)
  local secure=CreateFrame('Button',nil,UIParent,'SecureActionButtonTemplate')
- local stopButton=master.require('builder.UnitButton').configureUnitButton(nil,secure,targetSource,nil,false)
+ local stopButton=master.require('builder.units.UnitButton').configureUnitButton(nil,secure,targetSource,nil,false)
  local set=secure.SetAttribute
  secure.SetAttribute=function(self,...)assert(not combat,'target identity must not rewrite protected attributes in combat');return set(self,...)end
  name='Target B';health=200;combat=true;emit('PLAYER_TARGET_CHANGED');combat=false
@@ -225,8 +225,25 @@ do
  UnitName,UnitHealth,UnitHealthMax=savedName,savedHealth,savedMax
 end
 -- Headless groups are an optional root, and removing one preserves the child.
-local rootDraft=new(editor.require('Draft').EditorDraft);rootDraft:New()
-assert(rootDraft:Document().root.type=='cell','new cells do not require a headless wrapper')
+local rootDraft=new(editor.require('draft.Draft').EditorDraft);rootDraft:New()
+assert(#new(editor.require('draft.Draft').EditorSettings).nodes==0,'default settings have no implicit root')
+assert(#rootDraft.nodes==0 and #rootDraft:Tree()==0 and #rootDraft:VisibleTree()==0 and #rootDraft:Path()==0 and rootDraft.selected=='','new drafts have no hierarchy or selection')
+local emptyPreview=preview
+local emptyView=ui:Mount(editor.require('view.EditorView').EditorView(nil,{draft=rootDraft,width=1000,height=720}))
+assert(preview==emptyPreview and visible('Choose an element from the toolbar to begin.'),'empty editor renders without a preview component')
+ui:Unmount(emptyView)
+rootDraft:ExpandAll(false);rootDraft:ShiftSelected(-1);rootDraft:Remove()
+rootDraft:Commit();rootDraft:Apply()
+assert(not LumaUI.Presets:Get(rootDraft.documentId) and #rootDraft.nodes==0,'empty Save cannot install an implicit component')
+rootDraft:Save();local restoredEmpty=new(editor.require('draft.Draft').EditorDraft)
+assert(#restoredEmpty.nodes==0 and #restoredEmpty:Tree()==0,'empty draft persists across editor sessions')
+rootDraft:Add('progress')
+assert(#rootDraft.nodes==1 and rootDraft.nodes[1].kind=='progress' and rootDraft.nodes[1].parent=='' and rootDraft:Document().root.type=='progress','first chosen element is the root without a wrapper')
+rootDraft:Undo();assert(#rootDraft.nodes==0 and not rootDraft.propertyEditor.HasChanges,'Undo returns to an empty draft')
+rootDraft:Redo();assert(#rootDraft.nodes==1 and rootDraft.Selected.kind=='progress','Redo restores the first element')
+rootDraft:Remove();assert(#rootDraft.nodes==0,'removing the root returns to empty')
+rootDraft:Undo();assert(rootDraft.Selected.kind=='progress','root deletion supports Undo')
+rootDraft:Redo();assert(#rootDraft.nodes==0,'root deletion supports Redo')
 rootDraft:SetRootKind('fragment');rootDraft:Add('cell')
 local childID=rootDraft.selected;rootDraft:Add('label');local labelID=rootDraft.selected
 rootDraft:Select('root');rootDraft:Remove()
@@ -241,7 +258,7 @@ assert(rootDraft:Document().root.children[1].name=='Damage label' and rootDraft:
 rootDraft:Undo();assert(rootDraft:Document().root.children[1].name==nil)
 rootDraft:Redo();assert(rootDraft:Document().root.children[1].name=='Damage label')
 local roundtrip=LumaUI.Presets:Import(LumaUI.Presets:Export(rootDraft:Document()))
-local loaded=new(editor.require('Draft').EditorDraft);loaded:Load(roundtrip)
+local loaded=new(editor.require('draft.Draft').EditorDraft);loaded:Load(roundtrip)
 assert(loaded:Document().root.children[1].name=='Damage label')
 assert(not loaded:RenameNode(labelID,'  '),'empty element names are rejected')
 assert(loaded.documentName==roundtrip.name,'element rename does not rename the component')

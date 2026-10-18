@@ -6,9 +6,9 @@ do
  local native={activeLayout=1,layouts={{layoutName='Solo',layoutType=1},{layoutName='Raid',layoutType=1}}}
  C_EditMode={GetLayouts=function() return native end}
  local db=new(registry.require('lua_modules.wuira.lib.store.index').StoreRegistry,{addon='LumaUI',variable='ActivationTestDB'})
- local runtime=new(registry.require('builder.Presets').Presets,db)
- local skin=new(registry.require('builder.Skins').Skins,db)
- registry.require('builder.Builtins').registerBuiltins(nil,runtime,skin)
+ local runtime=new(registry.require('builder.presets.Presets').Presets,db)
+ local skin=new(registry.require('builder.skins.Skins').Skins,db)
+ registry.require('builder.builtins.Builtins').registerBuiltins(nil,runtime,skin)
  local creations,disposals,effects,releases=0,0,0,0
  runtime:RegisterSource('tracked',{properties={},Create=function() creations=creations+1;return {progress=new(HP,'player'),Dispose=function() disposals=disposals+1 end} end})
  runtime:RegisterComponent('trackedEffect',{headless=true,children='none',properties={},Apply=function() effects=effects+1;return function() releases=releases+1 end end})
@@ -24,7 +24,7 @@ do
  emit('GROUP_ROSTER_UPDATE');assert(creations==1,'unchanged context does not remount')
  group=0;emit('GROUP_ROSTER_UPDATE');assert(disposals==1,'leaving a group disposes sources')
  runtime:SetActivation('gated','never');group=3;emit('GROUP_ROSTER_UPDATE');assert(creations==1)
- local context=new(registry.require('builder.Activation').ActivationContext,runtime.Layouts)
+ local context=new(registry.require('builder.presets.Activation').ActivationContext,runtime.Layouts)
  local before=reads;d.enabled='never';assert(not context:Matches(d) and reads==before,'never skips native condition and class reads')
  d.enabled='always';group=0;before=reads
  assert(context:Matches(d) and reads==before,'manual always skips all automatic filters')

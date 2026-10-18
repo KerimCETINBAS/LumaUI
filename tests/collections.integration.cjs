@@ -10,7 +10,7 @@ const integration=fs.readFileSync(path.join(__dirname,'collections.integration.l
 const minimal=integration.slice(0,integration.indexOf('__LOAD_BUNDLES__'))+loads+`
 local master=__wuiraModules_LumaUI
 local controls
-local controlsClass=master.require('builder.CollectionControls').CollectionControls
+local controlsClass=master.require('builder.collections.CollectionControls').CollectionControls
 local constructControls=controlsClass.prototype.____constructor
 controlsClass.prototype.____constructor=function(self,...) constructControls(self,...);controls=self end
 LumaUISettings={}

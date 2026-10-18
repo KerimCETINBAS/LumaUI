@@ -43,6 +43,7 @@ local function driverTick()
  end
 end
 __EDITOR_AUTHORING_CHECKS__
+LumaUI.Presets:Unmount('paladin-party')
 local hpDef=LumaUI.Presets.sources:get('hp')
 local originalCreate=hpDef.Create
 local creates,disposals,sources=0,0,{}
@@ -51,7 +52,7 @@ hpDef.Create=function(self,props,context)
  local source=originalCreate(self,props,context)
  local previous=source.Dispose
  source.Dispose=function(self) disposals=disposals+1;if previous then previous(self) end end
- if props.unit=='$unit' then local guid=UnitGUID(source.progress.target.Token);if guid then sources[guid]=source.progress end end
+ if props.unit=='NamedUnitSource' then local guid=UnitGUID(source.progress.target.Token);if guid then sources[guid]=source.progress end end
  return source
 end
 local party=LumaUI.Presets:Get('paladin-party')
@@ -60,11 +61,12 @@ assert(party.root.type=='foreach' and party.root.source=='members' and raidDoc.r
 assert(party.sources[1].type=='groupMembers','roster is a data source')
 local function findNode(node,id)
  if node.id==id then return node end
+ if node.preset then local d=LumaUI.Presets:Get(node.preset);if d then local found=findNode(d.root,id);if found then return found end end end
  for _,child in ipairs(node.children or {}) do local found=findNode(child,id);if found then return found end end
 end
 local presets=LumaUI.ClickCastPresets:List()
 assert(#presets>=3 and presets[1].bindings[1].key=='BUTTON1' and presets[2].bindings[1].key=='BUTTON1','independent presets may share mouse combinations')
-LumaUI.Presets:Restore();driverTick()
+LumaUI.Presets:SetActivation('paladin-party','condMet');LumaUI.Presets:Restore();driverTick()
 local active=controls.active:get('paladin-party').instance
 local function at(unit,id,optional)
  local guid=ids[unit]
@@ -73,7 +75,7 @@ local function at(unit,id,optional)
  return frame
 end
 assert(not controls.active:get('paladin-raid'),'raid sources stay unmounted in a party')
-assert(creates==5,'only three members and their two pets allocate HP sources')
+assert(creates==5,'only three members and their two pets allocate HP sources: '..creates)
 assert(active.Frame.width==192 and active.Frame.height==276,'actual five entries occupy one column')
 local originalRoot,originalP1,originalP2,originalP3=active.Frame,at('player','member-frame'),at('party1','member-frame'),at('party2','member-frame')
 local sourceP3=sources.P3
@@ -185,7 +187,7 @@ LumaUI.Presets:SetActivation('paladin-party','never');assert(next(drivers)==nil,
 -- Exercise the same activation path as the editor for both roster scopes.
 for _,id in ipairs({'paladin-party','paladin-raid'}) do
  raid=id=='paladin-raid';count=2;class='PALADIN';ids={player='P1',party1='P2',raid1='P1',raid2='P2'}
- local draft=new(__wuiraModules_LumaUI_Editor.require('Draft').EditorDraft)
+ local draft=new(__wuiraModules_LumaUI_Editor.require('draft.Draft').EditorDraft)
  LumaUI.Presets:SetActivation(id,'condMet');emit('GROUP_ROSTER_UPDATE');driverTick()
  draft:Open(id);draft:UpdateActivation({enabled='always'});draft:Apply();driverTick()
  assert(LumaUI.Presets:Get(id).enabled=='always',draft.message)
@@ -207,17 +209,18 @@ assert(preview.Nodes:get('member-frame').width==192 and preview.Nodes:get('membe
 assert(next(drivers)==nil and preview.Nodes:get('member-heading').kind=='Frame' and not preview.Nodes:get('member-heading').attributes,'preview class fill never enables secure actions')
 preview:Dispose();assert(preview.Nodes.size==0,'preview releases all keyed nodes and aliases')
 -- Editing/reopening a built-in component must not restore shipped geometry.
-local edited=LumaUI.Presets:Get('paladin-party')
+local parentDefinition=LumaUI.Presets:Get('paladin-party')
+local edited=LumaUI.Presets:Get(parentDefinition.root.children[1].preset)
 findNode(edited.root,'member-name').props.fontSize=17
 findNode(edited.root,'member-health').props.height=41
 findNode(edited.root,'member-power').props.height=8
 findNode(edited.root,'member-heading').props.backgroundColor={r=.2,g=.3,b=.4}
 LumaUI.Presets:Save(edited,false)
-local draftClass=__wuiraModules_LumaUI_Editor.require('Draft').EditorDraft
+local draftClass=__wuiraModules_LumaUI_Editor.require('draft.Draft').EditorDraft
 local savedDraft=new(draftClass);savedDraft:Load(edited);savedDraft:Save()
 local restoredDraft=new(draftClass)
 local restored=restoredDraft:Document()
-assert(findNode(restored.root,'member-name').props.fontSize==17 and restored.enabled=='never','saved draft preserves edits and activation')
+assert(findNode(restored.root,'member-name').props.fontSize==17 and LumaUI.Presets:Get('paladin-party').enabled=='never','saved draft preserves edits and activation')
 assert(findNode(restored.root,'member-health').props.height==41 and findNode(restored.root,'member-power').props.height==8,'reopening keeps custom bar heights')
 assert(findNode(restored.root,'member-heading').props.backgroundColor.r==.2,'reopening does not replace user styling with built-in defaults')
 LumaUI.Presets:Restore()
@@ -236,6 +239,21 @@ assert(mountedTarget.Nodes:get('member-frame').attributes.unit=='target')
 mountedPlayer:Dispose()
 assert(mountedTarget.Nodes:get('member-frame').attributes.unit=='target')
 mountedTarget:Dispose()
+-- Preview uses three fixed members even when the live group is empty. Child $unit follows the live member.
+count=0;ids={}
+local child={version=1,kind='preset',id='scope-child',name='Scope child',sources={},root={id='label',type='unitText',props={unit='$unit',field='name',width=80,height=16}}}
+local parent={version=1,kind='preset',id='scope-parent',name='Scope parent',enabled='always',sources={{name='members',type='groupMembers',props={scope='party',pets=false}}},root={id='list',type='foreach',source='members',props={width=200,height=80,direction='vertical'},children={{id='row',type='preset',preset='scope-child',props={}}}},dependencies={child}}
+local kept=LumaUI.Presets:Validate({version=1,kind='preset',id='item-parent',name='Item parent',sources={{name='rows',type='list',props={items={{key='a'}}}}},root={id='list',type='foreach',source='rows',props={width=40,height=20},children={{id='row',type='preset',preset='item-child',props={},sourceProps={Item='parent.$item'}}}},dependencies={{version=1,kind='preset',id='item-child',name='Item child',sources={{name='Item',type='repeatItem',props={},isProp=true}},root={id='root',type='cell',props={width=40,height=20}}}}})
+assert(kept.root.children[1].sourceProps.Item=='parent.$item','existing list item bindings stay parent.$item')
+local sample=LumaUI.Presets:Preview(parent)
+sample.Frame=master.require('lua_modules.wuira.lib.index').wuira:Mount(sample.View)
+assert(sample.Nodes:get('list/preview-player/label') and sample.Nodes:get('list/preview-party1/label') and sample.Nodes:get('list/preview-party2/label'),'empty group preview shows three members')
+assert(sample.Nodes:get('list/preview-party3/label')==nil,'preview does not invent a fourth member')
+sample:Dispose()
+count=2;ids={player='P1',party1='P2'}
+local live=LumaUI.Presets:Mount(parent)
+assert(live.Nodes:get('list/guid:P2/label').fontString.text=='NameP2','child $unit follows the repeated member')
+live:Dispose()
 __CLICK_CAST_CHECKS__
 for _,key in ipairs(apiNames) do _G[key]=old[key] end
 originalPrint('Keyed party/raid: GUID reuse, DC/online, join/leave, token retargeting, manual visibility and combat reconciliation passed')

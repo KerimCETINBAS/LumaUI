@@ -1,9 +1,9 @@
 do
  local store=new(registry.require('lua_modules.wuira.lib.store.index').StoreRegistry,{addon='LumaUI',variable='TransferTestDB'})
- local runtime=new(registry.require('builder.Presets').Presets,store)
- local nativeSkins=new(registry.require('builder.Skins').Skins,store)
- registry.require('builder.Builtins').registerBuiltins(nil,runtime,nativeSkins)
- local service=new(registry.require('builder.PresetTransfer').PresetTransfer,{Presets=runtime,Skins=nativeSkins})
+ local runtime=new(registry.require('builder.presets.Presets').Presets,store)
+ local nativeSkins=new(registry.require('builder.skins.Skins').Skins,store)
+ registry.require('builder.builtins.Builtins').registerBuiltins(nil,runtime,nativeSkins)
+ local service=new(registry.require('builder.transfer.PresetTransfer').PresetTransfer,{Presets=runtime,Skins=nativeSkins})
  local function button(id) return {id=id,type='secureButton',props={width=24,height=24,action={type='spell',spell=635}}} end
  local child={version=1,kind='preset',id='transfer-child',name='Child',sources={},root=button('child-button')}
  local document={version=1,kind='preset',id='transfer-parent',name='Parent',sources={},dependencies={child},root={

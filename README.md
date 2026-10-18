@@ -37,6 +37,16 @@ The optional visual editor gives your work the full configuration workspace:
 
 Use **Unlock** to position your components on the game screen. Choose when they load by class, party or raid state, or the active native Edit Mode layout.
 
+## Share data between components
+
+In a child component's **Sources**, create a source with your own name and type, then enable **Expose as prop**. Choose **Optional input** when the child can work without it. Inputs declare a contract; they do not create a source or observer. UnitSource, health, mana, lists and converter outputs use the same system.
+
+Select the child reference in its parent and open **Inspector > Data**. Each input shows its name, type and required/optional state. Pick a compatible parent source from the dropdown. The existing instance is shared; children own only their subscriptions and locally derived sources.
+
+**Repeat** contains one component reference, with an optional second reference for pets. Each result has a separate child scope. Save the parent before opening a child definition so unfinished parent edits remain safe. For a roster, expose a **UnitSource** input such as `NamedUnitSource` on the child, use that name in its local HP/Mana/unit fields, then connect it to **parent.$unit** in the reference's Data tab. Nested Repeat resolves its own current member; further component layers forward named inputs. Every list can pass **parent.$item** into a **Repeat item** input. Repeat creates no named `items` source; choose its list in Data or enter a list helper. Reference Data fields accept dropdown choices or typed expressions (`parent.$item` or `VisibleRepeatName.$item`), applied with **Apply connection** or **Save**. Named context expressions resolve only against the Repeat creating that reference. Roster items also accept a UnitSource input; derive Class/HP/Mana from that input inside the child rather than connecting a raw item to a Unit class input. Legacy inline templates are extracted into visible, editable component definitions during validation/import; both member and pet slots are retained.
+
+Use **Rename source** in Sources and choose whether to update references. Yes updates local links and, for public inputs, saved caller bindings when you save the component. No keeps the old links visible as missing references for manual repair. Source renames support Undo/Redo and saved drafts; names are used exactly as entered, with no hidden connection aliases. Missing or incompatible bindings remain editable, and runtime refuses invalid connections. Protected changes still wait until combat ends.
+
 ## Give each click a purpose
 
 Turn a spell into a cooldown button, assign a key, or attach a named Click Cast preset to a unit button. Search your character's learned spells, usable items, consumables and macros when choosing an action.
@@ -76,7 +86,7 @@ When upgrading from a build that included **LumaUI.ActionBars**, remove the old 
 
 1. Open **`/luma`**, the **L** launcher beside the minimap, or LumaUI in game options.
 2. Open **Built-in presets**, choose a starter and confirm **Import**. Imported components start disabled; enable the one you want in **UI Library**.
-3. With the Editor enabled, choose **Edit**, customize the component and press **Save**. To start from scratch, choose **New** beside **Import component** in UI Library. Build any component with the shared element and source factories.
+3. With the Editor enabled, choose **Edit**, customize the component and press **Save**. To start from scratch, choose **New** beside **Import component** in UI Library. New drafts have an empty hierarchy; the first element you add becomes the root. Build any component with the shared element and source factories.
 4. Use **`/luma unlock`** to move it, **`/luma bind`** to assign keys, and **`/luma lock`** to finish.
 
 Built-in presets are optional imports. Your saved layouts, activation rules and bindings remain your own as the addon develops. The party and raid starters currently include Paladin click actions; choose the spells and ranks you want in **Click Cast**.

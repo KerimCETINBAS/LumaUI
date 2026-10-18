@@ -46,7 +46,7 @@ local probes={}
 local stopProbe=LumaUI.Presets:RegisterComponent('item-probe',{children='none',properties={},Create=function(_,props,children,context)
  local item=context:Item();assert(type(item.id)=='number' and type(item.name)=='string','ForEach exposes the raw current item to compiled factories')
  probes[item.id]=context
- return master.require('lua_modules.wuira.lib.index').UI.createElement(nil,'cell',{width=0,height=0})
+ return master.require('lua_modules.wuira.lib.ui.index').UI.createElement(nil,'cell',{width=0,height=0})
 end})
 local content={id='content',type='flow',props={width='inherit',height='inherit'},children={
  {id='icon',type='icon',source='item',props={width=24,height=24}},
@@ -79,17 +79,20 @@ preview.Frame=master.require('lua_modules.wuira.lib.index').wuira:Mount(preview.
 assert(preview.Nodes:get('spells/21084/button').kind=='Frame' and preview.Nodes:get('spells/21084/icon').texture.path==21084,'spell preview preserves icons without enabling actions')
 preview:Dispose()
 observedDef.Create=originalCreate;stopProbe()
-local draft=new(__wuiraModules_LumaUI_Editor.require('Draft').EditorDraft)
-draft:New();draft:Add('foreach');local listId=draft.selected;local template=draft:Children(listId)[1]
+local draft=new(__wuiraModules_LumaUI_Editor.require('draft.Draft').EditorDraft)
+draft:New();draft:Add('cell');draft:Add('foreach');local listId=draft.selected;local template=draft:Children(listId)[1]
 draft:BindItems('KnownSpells()')
-draft:Select(template.id);draft:Add('action');local spellId=draft.selected;draft:BindSource('item','source')
-draft:Add('icon');draft:BindSource('item','source')
+local itemComponent={version=1,kind='preset',id='spell-item-component',name='Spell item',sources={{name='Spell',type='repeatItem',props={},isProp=true}},root={id='button',type='secureButton',source='Spell',props={width=24,height=24},children={{id='icon',type='icon',source='Spell',props={width=24,height=24}}}}}
+LumaUI.Presets:Save(itemComponent)
+draft:Select(template.id);draft:ReplacePreset(itemComponent.id);draft:SetReferenceSource('Spell','parent.$item')
+assert(draft.Selected.sourceProps.Spell=='parent.$item','named item input is connected through reference Data')
+local spellId=draft.selected
 draft:Select(listId)
 assert(draft:Document().root.children[1].items=='KnownSpells()','spell lists are built with generic Repeat and the list helper')
 draft:BindItems('KnownSpells("Seal*")');assert(draft:Document().root.children[1].items=='KnownSpells("Seal*")')
 local beforeExpression=draft.Selected.items;draft:BindItems('Unknown("x")')
 assert(draft.Selected.items==beforeExpression,'invalid helpers preserve the last valid draft')
-draft:Select(spellId);assert(draft:InItemTemplate() and draft.Selected.props.unit==nil)
+draft:Select(spellId);assert(draft:InItemTemplate() and draft.Selected.kind=='preset' and draft.Selected.sourceProps.Spell=='parent.$item')
 draft.sourceEditor:Open();draft.sourceEditor:Type('knownSpells');draft.sourceEditor.name='my-spells';draft.sourceEditor.values.selectors='"Seal*"';draft.sourceEditor:Save()
 draft:Select(listId);draft:BindSource('my-spells','source')
 assert(draft.Selected.items==nil and draft.Selected.source=='my-spells','named list sources replace inline helpers atomically')

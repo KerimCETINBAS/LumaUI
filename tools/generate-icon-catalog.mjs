@@ -17,7 +17,7 @@ export function iconCatalogSource(entries=readIconCatalog()) {
     return "// Auto generated. Do not edit.\n// Source: packaged wuira/data/icons/forever.json\n\nexport const IconCatalogCount = "+entries.length+";\nexport function iconCatalogData(): readonly string[] {\n    return "+JSON.stringify(chunks,null,4)+";\n}\n";
 }
 export function generateIconCatalog(check=false,sdk){
-    const entries=readIconCatalog(sdk),source=iconCatalogSource(entries),output=path.join(root,"addons/editor/src/data/IconCatalog.ts");
+    const entries=readIconCatalog(sdk),source=iconCatalogSource(entries),output=path.join(root,"addons/editor/src/catalogs/data/IconCatalog.ts");
     if(check){if(!fs.existsSync(output)||fs.readFileSync(output,"utf8").replaceAll("\r\n","\n")!==source)throw new Error("Icon catalog is stale; run npm run catalogs:generate");}
     else{fs.mkdirSync(path.dirname(output),{recursive:true});fs.writeFileSync(output,source);}return entries.length;
 }

@@ -2,9 +2,9 @@
 local registry=__wuiraModules_LumaUI
 C_AddOns={IsAddOnLoaded=function() return true,true end}
 local store=new(registry.require('lua_modules.wuira.lib.store.index').StoreRegistry,{addon='LumaUI',variable='BuilderTestDB'})
-local presets=new(registry.require('builder.Presets').Presets,store)
-local skins=new(registry.require('builder.Skins').Skins,store)
-registry.require('builder.Builtins').registerBuiltins(nil,presets,skins)
+local presets=new(registry.require('builder.presets.Presets').Presets,store)
+local skins=new(registry.require('builder.skins.Skins').Skins,store)
+registry.require('builder.builtins.Builtins').registerBuiltins(nil,presets,skins)
 local components,sourceTypes={},{}
 for _,name in ipairs(presets:ComponentTypes()) do components[name]=true end
 for _,name in ipairs(presets:SourceTypes()) do sourceTypes[name]=true end
@@ -145,8 +145,8 @@ value.root.props.width=999
 assert(presets:Get('resources').root.props.width==220,'save is detached')
 local saved=presets:Get('resources');saved.root.props.width=555
 assert(presets:Get('resources').root.props.width==220,'get is detached')
-local reloaded=new(registry.require('builder.Presets').Presets,store)
-registry.require('builder.Builtins').registerBuiltins(nil,reloaded,new(registry.require('builder.Skins').Skins,store))
+local reloaded=new(registry.require('builder.presets.Presets').Presets,store)
+registry.require('builder.builtins.Builtins').registerBuiltins(nil,reloaded,new(registry.require('builder.skins.Skins').Skins,store))
 reloaded:RegisterSource('counted',{properties={},Create=function() return {progress=new(HP,'player')} end})
 reloaded:RegisterSource('unused',{properties={},Create=function() error('unused') end})
 reloaded:Restore();reloaded:Delete('resources');assert(#reloaded:List()==0,'enabled documents restore and delete')
@@ -268,9 +268,9 @@ presets:Delete('composed');presets:Delete('shared-child');presets:Delete('effect
 -- Imported native visibility belongs to its replacement component.
 local function visibilityHarness(variable)
  local memory=new(registry.require('lua_modules.wuira.lib.store.index').StoreRegistry,{addon='LumaUI',variable=variable})
- local p=new(registry.require('builder.Presets').Presets,memory)
- local s=new(registry.require('builder.Skins').Skins,memory)
- registry.require('builder.Builtins').registerBuiltins(nil,p,s)
+ local p=new(registry.require('builder.presets.Presets').Presets,memory)
+ local s=new(registry.require('builder.skins.Skins').Skins,memory)
+ registry.require('builder.builtins.Builtins').registerBuiltins(nil,p,s)
  return {Store=memory,Presets=p,Skins=s}
 end
 local fresh=visibilityHarness('FreshVisibilityDB')

@@ -19,6 +19,8 @@
       function UnitHealthMax(unit) assert(unit == "player"); return maxHealth end
       function UnitPower(unit,powerType) assert(unit == "player" and powerType == 0); powerReads=powerReads+1; return mana end
       function UnitPowerMax(unit,powerType) assert(unit == "player" and powerType == 0); return maxMana end
+      function UnitPowerType() return 0, 'MANA' end
+      PowerBarColor = { MANA = { r = 0, g = .2, b = 1 }, RAGE = { r = 1, g = 0, b = 0 } }
       function issecretvalue(value) return type(value) == "table" and rawget(value,"secret") == true end
       local frames = {}
       local nativeFrames = {}

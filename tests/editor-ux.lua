@@ -5,7 +5,7 @@ Minimap=CreateFrame('Frame',nil,UIParent);Minimap:SetSize(140,140)
 C_AddOns={IsAddOnLoaded=function() return true,true end}
 LumaUISettings={};master.require('index')
 local draft
-local Draft=editor.require('Draft').EditorDraft
+local Draft=editor.require('draft.Draft').EditorDraft
 local construct=Draft.prototype.____constructor
 Draft.prototype.____constructor=function(self,...) construct(self,...);draft=self end
 local preview
@@ -106,7 +106,7 @@ local old=preview
 picker.scripts.OnClick(picker);assert(draft.selected=='button-1-1' and preview==old,'preview selection waits until its native click returns')
 tick();assert(old.Nodes.size==0 and picker.scripts.OnClick==nil and not picker.shown,'preview replacement releases selection overlays')
 draft:SetWorkspace('inspector');tick();assert(visible('Properties') and visible('Width'),'inspector focus shows selected settings')
-local presentation=editor.require('NodePresentation').describeNode(nil,draft,draft.Selected)
+local presentation=editor.require('chrome.NodePresentation').describeNode(nil,draft,draft.Selected)
 assert(presentation.title=='Spell 20274' and presentation.texture==20274,'known spell identity and icon replace technical IDs')
 click('Restore');tick();draft:Select('root');tick()
 input('220'):SetText('247');click('Save');tick()
@@ -138,13 +138,15 @@ click('Visual Editor');assert(input('207'),'returning to the editor retains unfi
 click('Save');tick();assert(find(LumaUI.Presets:Get(document.id).root,bar).props.width==207,'retained typed input can be saved after returning')
 click('Back');assert(visible('CUSTOMIZE') and visible('New'),'Back returns to the library and its create actions')
 source:Open('ux.mana');source.values.unit='target';source.inputs:clear()
-click('New');assert(draft.documentId=='component-1' and draft.nodes[1].kind=='cell' and visible('LumaUI / Editor'),'library creates a fresh editor draft')
+click('New');assert(draft.documentId=='component-1' and #draft.nodes==0 and #draft:Tree()==0 and visible('LumaUI / Editor'),'library creates an empty editor draft')
 assert(not LumaUI.Presets:Get('component-1'),'creating a draft does not install it')
 assert(not draft.sourceEditor.HasChanges and #draft.sources==0,'a new component cannot inherit an unfinished source form')
 assert(not visible('New party') and not visible('New raid') and not visible('New spell list') and not visible('New headless'),'only generic creation is exposed')
-click('Save');tick();assert(LumaUI.Presets:Get('component-1').root.type=='cell' and not LumaUI.Presets:IsHeadless(LumaUI.Presets:Get('component-1')),'new components start as visual cells without a mandatory group')
+click('Save');tick();assert(not LumaUI.Presets:Get('component-1') and #draft.nodes==0,'saving an empty draft does not create a component')
+draft:Add('cell');tick();assert(#draft.nodes==1 and draft.Selected.parent=='','first chosen element becomes the root')
+click('Save');tick();assert(LumaUI.Presets:Get('component-1').root.type=='cell' and not LumaUI.Presets:IsHeadless(LumaUI.Presets:Get('component-1')),'an explicitly added Cell saves without a wrapper')
 draft:Add('foreach');tick()
-assert(draft.sources[1].type=='list' and #draft.sources[1].props.items==0,'Repeat does not install a party source')
+assert(#draft.sources==0 and draft.Selected.source==nil,'Repeat does not create a named items source')
 draft.propertyEditor:Ensure();draft.propertyEditor.itemsExpression='KnownSpells("Seal*")';draft.propertyEditor.inputs:clear();click('Save');tick()
 assert(LumaUI.Presets:Get('component-1').root.children[1].items=='KnownSpells("Seal*")','one Save commits a typed list expression')
 local gap=draft.Selected.props.gap
@@ -176,12 +178,17 @@ filter=input('[EXAMPLE]');typeText(filter,'not found')
 assert(visible('No matching components') and input('not found')==filter,'no-match feedback keeps the same native input')
 typeText(filter,special.id);assert(visible(special.name),'stable IDs are searchable too')
 filter.scripts.OnEscapePressed(filter);assert(searchInput()==filter and draft.componentFilter=='','Escape clears the filter')
-for _,choice in ipairs(editor.require('ElementCatalog').elementChoices(nil)) do
- local name=editor.require('Glyph').elementIcon(nil,choice.value)
+for _,choice in ipairs(editor.require('catalogs.ElementCatalog').elementChoices(nil)) do
+ local name=editor.require('chrome.Glyph').elementIcon(nil,choice.value)
  assert(LumaUI.Theme.icons[name],'every registered element has a native SVG glyph: '..choice.value)
 end
 draft:StartRename();tick();typeText(input('Ribbon host'),'Unsaved ribbon name')
 draft:Load(special);tick()
 assert(not draft.renaming and draft.documentName==special.name,'switching components clears the name edit state')
+
+local broken={version=1,kind='preset',id='class-as-unit',name='Class as unit',sources={{name='MEMBER',type='class',props={},isProp=true},{name='HP',type='hp',props={unit='MEMBER'}}},root={id='bar',type='progress',props={width=80,height=12},source='HP'}}
+LumaUI.Presets:Save(broken,false)
+LumaUI:EditPreset(LumaUI.Presets:Get('class-as-unit'));tick()
+assert(draft.documentId=='class-as-unit' and visible('Sources'),'Edit opens a component even when a class input is used as a unit')
 
 print('Editor usability: full workspace, Back, toolbox, focus views, folds, native scrolling, preview selection and one Save passed')

@@ -1,4 +1,4 @@
-import type { Cell } from "wuira";
+import type { Cell } from "wuira/ui";
 import type { ValueSource, ProgressSource, TimerSource, TextureSource, UnitInput, KnownSpell, KnownSpellsStatus } from "wuira/datasources";
 import type { ForEachSource } from "wuira/ui";
 import type { SecureAction } from "wuira/ui";
@@ -7,7 +7,7 @@ export type Properties = Record<string, DataValue>;
 export interface SourceSpec { isProp?: boolean; optional?: boolean; name: string; type: string; props: Properties; }
 export interface PropertySourceBinding { source: string; path?: string; }
 export interface ComponentActivationOverride { enabled?: ActivationMode; class?: CollectionClass | ""; condition?: CollectionCondition | ""; layout?: string; }
-export interface PresetNode { name?: string; activation?: ComponentActivationOverride; sourceProps?: Record<string, string>; bindings?: Record<string, PropertySourceBinding>; id: string; type: string; props: Properties; source?: string; sourcePath?: string; visibleSource?: string; textSource?: string; alphaSource?: string; children?: PresetNode[]; preset?: string; items?: string; }
+export interface PresetNode { name?: string; activation?: ComponentActivationOverride; sourceProps?: Record<string, string>; bindings?: Record<string, PropertySourceBinding>; sections?: readonly ElementSection[]; id: string; type: string; props: Properties; source?: string; sourcePath?: string; visibleSource?: string; visiblePath?: string; visibleWhen?: "true" | "false"; textSource?: string; alphaSource?: string; children?: PresetNode[]; preset?: string; items?: string; }
 export type ClickCastAction =
     | { readonly spellId: number; readonly itemId?: never; readonly macro?: never }
     | { readonly itemId: number; readonly spellId?: never; readonly macro?: never }
@@ -55,7 +55,10 @@ export type BlizzardElementProps = { readonly type: "dynamic"; readonly target: 
 );
 export interface LumaHelpers { KnownSpells(...selectors: SpellNameSelector[]): KnownSpellList; PlayerActions(): PlayerActionList; UnitToBool(options?: UnitFilter): UnitPredicate; }
 export interface ListHelperDefinition { readonly source: string; Parse(argumentsText: string): Properties; }
+export interface ElementSection { readonly source: string; readonly key: string; readonly color?: { readonly r: number; readonly g: number; readonly b: number; readonly a?: number }; readonly texture?: string; }
+export interface SourceChannel { readonly key: string; readonly label: string; }
 export interface SourceInstance {
+    unit?: import("wuira/datasources").UnitSource;
     MatchUnit?: UnitPredicate;
     value?: ValueSource<unknown>;
     items?: ForEachSource<object>;
@@ -75,7 +78,8 @@ export interface SourceInstance {
     Dispose?(): void;
 }
 export interface SourceContext { readonly Preview?: boolean; readonly Manual?: boolean; Item(): object | undefined; Unit(unit: string): UnitInput; Source(name: string): SourceInstance; }
-export interface SourceDefinition { properties: PropertyRules; Validate?(props: Properties): void; references?: readonly string[]; Create(props: Properties, context: SourceContext): SourceInstance; }
+export type SourceCapability = "ItemsUnit" | "ItemsTemplate" | "BindItem" | "unit" | "value" | "items" | "progress" | "texture" | "action" | "cooldown" | "Text" | "Alpha" | "IsActive" | "MatchUnit";
+export interface SourceDefinition { capabilities?: readonly SourceCapability[]; properties: PropertyRules; channels?: readonly SourceChannel[]; Validate?(props: Properties): void; references?: readonly string[]; Create(props: Properties, context: SourceContext): SourceInstance; }
 export interface ComponentContext { readonly Preview?: boolean; Item(): object | undefined; Unit(unit: string): UnitInput; Source(): SourceInstance | undefined; ResolveSource(name: string): SourceInstance; Template?(unit: string): { View: Cell; Dispose(): void }; }
 export interface VisualComponentDefinition {
     Validate?(props: Properties): void;
@@ -112,6 +116,12 @@ export interface DocumentLibrary<T> {
 export interface CollectionKeybinding { collection: string; node: string; key: string; }
 export interface PresetAPI extends DocumentLibrary<PresetDocument> {
     Validate(document: unknown, allowMissing?: boolean): PresetDocument;
+    SourcesCompatible(supplied: string, expected: string): boolean;
+    RepeatSourceCompatible(collection: string | undefined, field: "$item" | "$unit" | "$pet", expected: string): boolean;
+    SourceReferences(type: string): readonly string[];
+    SourceChannels(type: string): readonly SourceChannel[];
+    RenameSource(document: PresetDocument, oldName: string, newName: string, updateReferences: boolean): PresetDocument;
+    ApplySourceRenames(document: PresetDocument, renames: readonly { oldName: string; newName: string; updateReferences: boolean; input?: boolean }[]): void;
     Identity(name: string, excludeID?: string): { id: string; name: string; duplicate: boolean };
     Rename(document: PresetDocument, oldID: string, updateReferences: boolean): void;
     readonly Layouts: import("wuira/datasources").EditModeLayouts;
@@ -137,6 +147,8 @@ export interface PresetAPI extends DocumentLibrary<PresetDocument> {
     ParseItems(expression: string): SourceSpec;
     SourceTypes(): string[];
     SourceProperties(type: string): PropertyRules;
+    InputProperties(type: string): PropertyRules;
+    InitialText(type: string, key: string): string | undefined;
     Create(document: PresetDocument): PresetInstance;
     /** Uses the same factories and sources with secure actions and mouse input disabled. */
     Preview(document: PresetDocument): PresetInstance;

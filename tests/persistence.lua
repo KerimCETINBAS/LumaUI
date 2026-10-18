@@ -23,13 +23,13 @@ LumaUI.Presets:Save(foreign,true);LumaUI.Presets:Restore()
 assert(LumaUI.Presets:Get('foreign').owner=='OtherFeature' and LumaUI.Presets:ActivationStatus('foreign')=='Waiting for addon','other addon ownership still gates activation')
 LumaUI.Presets:Delete('foreign')
 assert(LumaUI.ClickCastPresets:Get('keep-heal').bindings[1].key=='SHIFT-BUTTON1' and LumaUI.Presets:GetBinding('kept','button')=='CTRL-H','bindings and click presets retain user choices')
-local draftClass=__wuiraModules_LumaUI_Editor.require('Draft').EditorDraft
+local draftClass=__wuiraModules_LumaUI_Editor.require('draft.Draft').EditorDraft
 local draft=new(draftClass);assert(draft.documentName=='My draft' and draft.nodes[1].width==91,'editor draft is restored')
 local changed=LumaUI.Presets:Get('kept');changed.root.props.x=321;LumaUI.Presets:Apply(changed)
 assert(actual['lumaui.builder'].documents[1].root.props.x==321 and next(temporary)==nil,'edits commit to the live saved table')
 local Registry=master.require('lua_modules.wuira.lib.store.index').StoreRegistry
 local second=new(Registry,{addon='LumaUI',variable='LumaUISettings'})
-local Settings=master.require('builder.Library').BuilderSettings
+local Settings=master.require('builder.library.Library').BuilderSettings
 assert(second:get(Settings).documents[1].root.props.x==321,'saved changes survive a fresh registry')
 second:Dispose()
 local wire=LumaUI.BuiltinPresets.PaladinParty
@@ -59,15 +59,15 @@ assert(#LumaUI.ClickCastPresets:List()==4 and LumaUI.ClickCastPresets:Get('keep-
 assert(LumaUI.Presets:ActivationStatus('paladin-party')=='Disabled','manual built-in imports start disabled')
 assert(LumaUI.Presets:Get('kept').root.props.x==321 and LumaUI.Presets:GetBinding('kept','button')=='CTRL-H','builtin import preserves personal layout and keys')
 click('Import · Paladin healer · Party');click('Import')
-assert(inputWith(wire) and #LumaUI.Presets:List()==2 and #LumaUI.ClickCastPresets:List()==4,'a duplicate ID cannot overwrite a saved component or create extra click dependencies')
+assert(inputWith(wire) and #LumaUI.Presets:List()==4 and #LumaUI.ClickCastPresets:List()==4,'a duplicate ID cannot overwrite a saved component or create extra click dependencies')
 click('Close');LumaUI:CloseCustomization()
 assert(LumaUI.BuiltinPresets.PaladinParty==wire,'import never mutates the built-in string')
 local remove=LumaUI:RegisterBuiltinPreset({key='TestBuiltin',name='Test',kind='preset',importString=wire})
-assert(LumaUI.BuiltinPresets.TestBuiltin==wire and #LumaUI.Presets:List()==2,'extensions register only strings without installing them')
+assert(LumaUI.BuiltinPresets.TestBuiltin==wire and #LumaUI.Presets:List()==4,'extensions register only strings without installing them')
 assert(not pcall(function() LumaUI:RegisterBuiltinPreset({key='TestBuiltin',name='Duplicate',kind='preset',importString=wire}) end))
 assert(not pcall(function() LumaUI:RegisterBuiltinPreset({key='Factory',name='Factory',kind='preset',importString=wire,Create=function() error('must never run') end}) end),'factory callbacks are not accepted by the catalog')
 remove();assert(LumaUI.BuiltinPresets.TestBuiltin==nil and LumaUI.BuiltinPresets.PaladinParty==wire)
-local transfer=new(master.require('builder.PresetTransfer').PresetTransfer,LumaUI)
+local transfer=new(master.require('builder.transfer.PresetTransfer').PresetTransfer,LumaUI)
 local another=transfer:Decode(wire,'preset');transfer:PrepareClickCast(another)
 assert(#LumaUI.ClickCastPresets:List()==4,'reimporting equivalent dependencies does not duplicate mappings')
 local copyIdentity=LumaUI.Presets:Identity('Paladin healer · Party')

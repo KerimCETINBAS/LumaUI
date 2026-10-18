@@ -27,7 +27,7 @@ write({secret=true});assert(first.value==12,'restricted input is not evaluated')
 instance:Dispose();assert(detached==1 and disposed==1 and next(callbacks)==nil,'unmount disposes converter listeners before shared input')
 assert(mathDocument.sources[2].props.expression=='2 * input','formulas remain LumaUI document data')
 
-local formula=master.require('builder.MathFormula').MathFormula
+local formula=master.require('builder.converters.MathFormula').MathFormula
 for _,entry in ipairs({{'-input ^ 2',-16},{'2 ^ 3 ^ 2',512},{'input % 3',1},{'2 ** -2',.25},{'1e2 + .5',100.5}})do
  assert(new(formula,entry[1]):Evaluate(4)==entry[2],entry[1])
 end
@@ -70,29 +70,29 @@ assert(#migrated.sources==2 and migrated.root.bindings.backgroundColor.source==m
 assert(LumaUI.Presets:ComponentProperties('secureButton').classBackground==nil,'retired settings are absent from the inspector schema')
 local shared=LumaUI.Presets:Import(LumaUI.Presets:Export(migrated));assert(shared.root.bindings.borderColor.source==migrated.root.bindings.borderColor.source,'sharing preserves generic bindings')
 
-local draft=new(editor.require('Draft').EditorDraft);draft:Load(colors)
+local draft=new(editor.require('draft.Draft').EditorDraft);draft:Load(colors)
 local state=draft.sourceEditor;state:Open('color')
 assert(state.values['cases.count']=='2' and state.values['cases.0.output.type']=='color')
-local form=ui:Mount(editor.require('SourceInspector').SourceInspector(nil,{draft=draft,width=420,height=700}))
+local form=ui:Mount(editor.require('inspector.SourceInspector').SourceInspector(nil,{draft=draft,width=420,height=700}))
 local edit
 for i=#nativeFrames,1,-1 do local f=nativeFrames[i];if f.kind=='EditBox' and f:IsVisible() and f.text=='PALADIN' then edit=f;break end end
 assert(edit,'case matches use native text inputs');edit:SetText('PRIEST');assert(state:Save())
 assert(draft:Document().sources[2].props.cases[1].equals=='PRIEST','typed match edits are saved')
 ui:Unmount(form);state:AddCase();assert(state.values['cases.count']=='3');state:RemoveCase(2);assert(state.values['cases.count']=='2')
 state.values['cases.0.output.r']='.9';assert(state:Save())
-draft:Save();local restored=new(editor.require('Draft').EditorDraft)
+draft:Save();local restored=new(editor.require('draft.Draft').EditorDraft)
 assert(restored:Document().root.bindings.backgroundColor.source=='color' and restored:Document().sources[2].props.cases[1].value.r==.9,'draft persistence retains editable converters and bindings')
 restored:BindProperty('alpha','color','a');restored.propertyEditor:Open();restored.propertyEditor.values['$property.alpha.path']='r';restored.propertyEditor.inputs:clear();assert(restored.propertyEditor:Save() and restored:Document().root.bindings.alpha.path=='r','one Save commits output paths')
 restored:BindProperty('alpha','color','value.__proto__');assert(restored.Selected.bindings.alpha.path=='r','invalid paths roll back atomically')
 
 -- The source workspace exposes every form, including converters, in one native scroll area.
 state:Open('color')
-local sourcesView=ui:Mount(editor.require('SourceInspector').SourceInspector(nil,{draft=draft,width=420,height=360}))
+local sourcesView=ui:Mount(editor.require('inspector.SourceInspector').SourceInspector(nil,{draft=draft,width=420,height=360}))
 local function shown(text)
  for i=#nativeFrames,1,-1 do local f=nativeFrames[i];if f.fontString and f.fontString.text==text and f:IsVisible() then return f end end
 end
 assert(shown('klass') and shown('color') and shown('Case converter') and shown('Input equals'),'source cards expose all source fields without switching a selector')
-assert(not shown('color v'),'the source selector is removed')
+assert(not shown('Source: color'),'the source selector is removed')
 local scroll
 local cards=0
 for i=#nativeFrames,1,-1 do local f=nativeFrames[i];if f:IsVisible() then
@@ -116,17 +116,52 @@ assert(state:SaveAll())
 
 local properties=draft.propertyEditor
 properties:Open();properties:Section('Display')
-local inspector=ui:Mount(editor.require('PropertyInspector').PropertyInspector(nil,{draft=draft,width=420,height=700}))
-assert(shown('Background color') and shown('Source: color v') and not shown('Property sources'),'a visual property owns its source selection')
+local inspector=ui:Mount(editor.require('inspector.PropertyInspector').PropertyInspector(nil,{draft=draft,width=420,height=700}))
+assert(shown('Background color') and shown('Source: color') and not shown('Property sources'),'a visual property owns its source selection')
 assert(not shown('Red'),'bound appearance fields hide their static RGBA controls')
 ui:Unmount(inspector)
 properties:Section('Data')
-inspector=ui:Mount(editor.require('PropertyInspector').PropertyInspector(nil,{draft=draft,width=420,height=700}))
+inspector=ui:Mount(editor.require('inspector.PropertyInspector').PropertyInspector(nil,{draft=draft,width=420,height=700}))
 assert(not shown('Background color') and not shown('Opacity from source') and not shown('Property sources'),'Data does not duplicate display bindings')
 ui:Unmount(inspector)
 draft:BindProperty('backgroundColor');properties:Section('Display')
-inspector=ui:Mount(editor.require('PropertyInspector').PropertyInspector(nil,{draft=draft,width=420,height=700}))
-assert(shown('Red') and shown('Static value v'),'switching a property to Static restores its value editor')
+inspector=ui:Mount(editor.require('inspector.PropertyInspector').PropertyInspector(nil,{draft=draft,width=420,height=700}))
+assert(shown('Red') and shown('Static value'),'switching a property to Static restores its value editor')
 ui:Unmount(inspector)
+
+-- Secure actions must measure inside content-sized inspector cards.
+draft:New();draft:Add('action');properties=draft.propertyEditor
+properties:Open();properties:Section('Actions')
+inspector=ui:Mount(editor.require('inspector.PropertyInspector').PropertyInspector(nil,{draft=draft,width=420,height=700}))
+assert(shown('Click Cast preset') and shown('Standard click actions'),'Actions shows the Click Cast selector')
+ui:Unmount(inspector)
+
+-- An unchanged empty custom-path notification must not erase a catalog texture.
+draft:New();draft:Add('icon');draft.Selected.props.texture=135940
+properties=draft.propertyEditor;properties:Open();properties:Section('Display')
+inspector=ui:Mount(editor.require('inspector.PropertyInspector').PropertyInspector(nil,{draft=draft,width=420,height=700}))
+local override
+for i=#nativeFrames,1,-1 do local frame=nativeFrames[i]
+ if frame.kind=='EditBox' and frame:IsVisible() and frame.parent.height==25 then override=frame;break end
+end
+assert(override and override.text=='','catalog textures leave the custom override blank')
+override.scripts.OnTextChanged(override,false)
+assert(properties:Save())
+assert(draft.Selected.props.texture==135940,'saving preserves the selected catalog texture')
+ui:Unmount(inspector)
+inspector=ui:Mount(editor.require('inspector.PropertyInspector').PropertyInspector(nil,{draft=draft,width=420,height=700}))
+for i=#nativeFrames,1,-1 do local frame=nativeFrames[i]
+ if frame.kind=='EditBox' and frame:IsVisible() and frame.parent.height==25 then override=frame;break end
+end
+override:SetText('Interface\\Icons\\Spell_Holy_Renew')
+assert(properties:Save() and draft.Selected.props.texture=='Interface\\Icons\\Spell_Holy_Renew','editing a custom path still changes the texture')
+ui:Unmount(inspector)
+draft:UpdateSources({{name='renew',type='spell',props={spellId=139}}})
+draft:BindSource('renew','source');properties:Open()
+assert(properties:Save() and properties:Save() and draft.Selected.source=='renew','repeated saves retain an icon source binding')
+local savedIcon=LumaUI.Presets:Import(LumaUI.Presets:Export(draft:Document()))
+draft:Load(savedIcon)
+assert(draft:Document().root.source=='renew','icon binding survives export and reload')
+
 
 print('Converter factories: typed cases, arithmetic, events, appearance, migration, editor and persistence passed')

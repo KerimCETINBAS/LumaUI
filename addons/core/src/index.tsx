@@ -1,7 +1,7 @@
-import { ComponentPreview } from "./builder/ComponentPreview";
-import { LumaOptions } from "./Options";
-import { NativeFrameControls } from "./NativeFrameControls";
-import { installActionSlotCommands } from "./NativeActionSlots";
+import { ComponentPreview } from "./builder/library/ComponentPreview";
+import { LumaOptions } from "./shell/Options";
+import { NativeFrameControls } from "./shell/NativeFrameControls";
+import { installActionSlotCommands } from "./shell/NativeActionSlots";
 import { PlayerActions } from "./helpers/PlayerActions";
 import { KnownSpells } from "./helpers/KnownSpells";
 import { UnitToBool } from "./helpers/UnitToBool";
@@ -9,16 +9,16 @@ import { UnitToBool } from "./helpers/UnitToBool";
 import { darkTheme } from "./theme/dark";
 import type { LumaCoreAPI, PresetDocument } from "./core/contract";
 
-import { CollectionControls } from "./builder/CollectionControls";
+import { CollectionControls } from "./builder/collections/CollectionControls";
 import { BuiltinPresets } from "./BuiltinPresets";
-import { BuiltinPresetLibrary } from "./builder/BuiltinPresetLibrary";
-import { Presets } from "./builder/Presets";
-import { ClickCastLibrary, STANDARD_CLICK_PRESET } from "./builder/ClickCastLibrary";
-import { Skins } from "./builder/Skins";
-import { registerBuiltins } from "./builder/Builtins";
-import { TransferDialog } from "./builder/TransferDialog";
-import { installLibrary } from "./builder/LibraryView";
-import { installClickCastLibrary } from "./builder/ClickCastLibraryView";
+import { BuiltinPresetLibrary } from "./builder/library/BuiltinPresetLibrary";
+import { Presets } from "./builder/presets/Presets";
+import { ClickCastLibrary, STANDARD_CLICK_PRESET } from "./builder/clickcast/ClickCastLibrary";
+import { Skins } from "./builder/skins/Skins";
+import { registerBuiltins } from "./builder/builtins/Builtins";
+import { TransferDialog } from "./builder/transfer/TransferDialog";
+import { installLibrary } from "./builder/library/LibraryView";
+import { installClickCastLibrary } from "./builder/clickcast/ClickCastLibraryView";
 
 function initialize(): void {
     const options = new LumaOptions();
@@ -38,7 +38,7 @@ function initialize(): void {
         RegisterPresetEditor: callback => { editor = callback; return () => { if (editor === callback) editor = undefined; }; },
         RegisterPresetCreator: callback => { creator = callback; return () => { if (creator === callback) creator = undefined; }; },
         CreatePreset: () => { if (InCombatLockdown()) { console.log("Create components after combat."); return; } if (creator === undefined) { console.log("Enable LumaUI.Editor to create components."); return; } creator(); options.OpenCustomization("editor"); },
-        EditPreset: document => { if (InCombatLockdown()) { console.log("Edit components after combat."); return; } if (editor === undefined) { console.log("Enable LumaUI.Editor to edit components."); return; } editor(presets.Validate(document)); options.OpenCustomization("editor"); },
+        EditPreset: document => { if (InCombatLockdown()) throw "Edit components after combat."; if (editor === undefined) throw "Enable LumaUI.Editor to edit components."; editor(presets.Validate(document, true)); options.OpenCustomization("editor"); },
         OpenImport: (kind, callback, importString) => transfer.Import(kind, callback, importString),
         OpenExport: (document, clickCastPresets) => transfer.Export(document, clickCastPresets),
         Presets: presets,

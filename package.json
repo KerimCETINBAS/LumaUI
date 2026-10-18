@@ -1,6 +1,6 @@
 {
   "name": "lumaui-monorepo",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "license": "MIT",
   "engines": {
@@ -25,6 +25,6 @@
   "devDependencies": {
     "@resvg/resvg-js": "2.6.2",
     "fengari-node-cli": "^0.1.0",
-    "wuira": "0.2.8"
+    "wuira": "^0.3.0"
   }
 }

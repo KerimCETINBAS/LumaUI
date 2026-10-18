@@ -1,5 +1,5 @@
 do
- local Transfer=master.require('builder.PresetTransfer').PresetTransfer
+ local Transfer=master.require('builder.transfer.PresetTransfer').PresetTransfer
  local service=new(Transfer,LumaUI)
  local Encoding=master.require('lua_modules.wuira.lib.platform.Encoding').Encoding
  local captured

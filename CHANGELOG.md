@@ -4,6 +4,33 @@ All notable changes to the LumaUI addon suite are recorded here. Core and Editor
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-18
+
+### Added
+
+- Named, typed component source inputs for UnitSource, resources, lists and converter outputs, with capability-based compatibility, required/optional inputs and dropdown connections in Inspector > Data.
+- Source rename with explicit reference-update choices, scoped local rewrites, saved caller input updates, draft persistence and Undo/Redo.
+- Unit text paths for Name, Surname and FullName. FullName joins a player's forename and surname; NPCs keep Surname and FullName empty. Leader text and an IsLeader boolean are available on the same unit.
+- Visibility accepts any boolean source, with its own path and a show-when-true or show-when-false choice.
+- Icon glow accessory drawn by ForeverAuras LibCustomGlow: pixel, button overlay, autocast shine and proc.
+
+### Changed
+
+- Repeat no longer generates a named `items` source. Its child has an explicit Item input; current-item connections work for all lists, and Data accepts typed `parent.$item` or visible `RepeatName.$item` expressions alongside dropdown choices.
+- Preserve item source identity through component layers, notify consumers on keyed row updates, and remove only legacy empty list placeholders used exclusively by Repeat.
+- New editor drafts start with an empty hierarchy. The first chosen element becomes the root; empty drafts persist and first-element/root removal supports Undo/Redo.
+- Repeat uses component reference slots with separate instance scopes. Current-member data passes through named inputs using parent.$unit; spell item sources use parent.$item. Legacy inline templates migrate without dropping member/pet content.
+- Borrowed sources retain owner identity and cleanup; child subscriptions and derived sources remain local. Invalid contexts report errors instead of silently using player data.
+- Common dropdown labels use a separate themed chevron, preserving clipping and scrolling for narrow inspectors.
+- Flow and grid layouts choose arrange direction separately from horizontal and vertical placement. A child's anchor places it inside the space reserved for it. Older horizontal, vertical and justify settings still load.
+
+### Fixed
+
+- Invalid typed component connections restore the previous accepted field and show actionable type/context errors, so selection, Undo and retries are no longer trapped by rejected form text.
+- Missing required inputs in repeated children render a normalized empty preview cell instead of failing in the layout engine.
+- Unchanged custom texture input notifications no longer erase an icon selected from the catalog when saving.
+- Secure Button Actions inspector opens correctly inside the content-sized section cards, including the Click Cast preset selector.
+
 ## [0.2.2] - 2026-10-17
 
 ### Added
@@ -13,12 +40,16 @@ All notable changes to the LumaUI addon suite are recorded here. Core and Editor
 
 ### Fixed
 
+- Invalid typed component connections restore the previous accepted field and show actionable type/context errors, so selection, Undo and retries are no longer trapped by rejected form text.
+- Missing required inputs in repeated children render a normalized empty preview cell instead of failing in the layout engine.
 - New editor components start with a Cell instead of a mandatory headless group. Root type is editable; removing a headless root preserves its children and supports Undo.
 
 ## [0.2.0] - 2026-10-17
 
 ### Fixed
 
+- Invalid typed component connections restore the previous accepted field and show actionable type/context errors, so selection, Undo and retries are no longer trapped by rejected form text.
+- Missing required inputs in repeated children render a normalized empty preview cell instead of failing in the layout engine.
 - Target UnitSource emits identity invalidations on PLAYER_TARGET_CHANGED; dependent HP, text and unit displays refresh without invalidating unrelated unit sources or rewriting secure unit attributes.
 
 - Library thumbnails use source-free static snapshots and guard secret measurements, avoiding live health/power conversions while preserving saved components.
@@ -87,6 +118,8 @@ All notable changes to the LumaUI addon suite are recorded here. Core and Editor
 
 ### Fixed
 
+- Invalid typed component connections restore the previous accepted field and show actionable type/context errors, so selection, Undo and retries are no longer trapped by rejected form text.
+- Missing required inputs in repeated children render a normalized empty preview cell instead of failing in the layout engine.
 - Replace the floating rectangular minimap launcher with a standard minimap-edge
   icon. Use LibDBIcon when present, with a circular draggable fallback, click-to-open
   behavior and persisted angular position. No other addon is required.
@@ -98,6 +131,9 @@ All notable changes to the LumaUI addon suite are recorded here. Core and Editor
 
 ### Changed
 
+- Repeat no longer generates a named `items` source. Its child has an explicit Item input; current-item connections work for all lists, and Data accepts typed `parent.$item` or visible `RepeatName.$item` expressions alongside dropdown choices.
+- Preserve item source identity through component layers, notify consumers on keyed row updates, and remove only legacy empty list placeholders used exclusively by Repeat.
+- New editor drafts start with an empty hierarchy. The first chosen element becomes the root; empty drafts persist and first-element/root removal supports Undo/Redo.
 - Remove role icons from party/raid starter headings. Offline members display an editable gray OFFLINE panel in place of resources, driven by a shared connection source and ordinary alpha converters; secure actions remain intact.
 
 - Replace the party starter's left selection strip with a class-colored name heading that retains standard left/right-click actions. Existing saved components are unchanged; import the updated starter to use it.
@@ -163,6 +199,8 @@ All notable changes to the LumaUI addon suite are recorded here. Core and Editor
 
 ### Fixed
 
+- Invalid typed component connections restore the previous accepted field and show actionable type/context errors, so selection, Undo and retries are no longer trapped by rejected form text.
+- Missing required inputs in repeated children render a normalized empty preview cell instead of failing in the layout engine.
 - Tie native player-frame hiding to the replacement collection's lifetime instead of also hiding unit frames in the default skin.
 - Migrate the old default skin's global visibility into existing player collections without replacing edited layouts or changing their enabled state.
 - Restore native frames when the last hiding collection stops; defer protected cleanup until combat ends.
@@ -171,6 +209,9 @@ All notable changes to the LumaUI addon suite are recorded here. Core and Editor
 
 ### Changed
 
+- Repeat no longer generates a named `items` source. Its child has an explicit Item input; current-item connections work for all lists, and Data accepts typed `parent.$item` or visible `RepeatName.$item` expressions alongside dropdown choices.
+- Preserve item source identity through component layers, notify consumers on keyed row updates, and remove only legacy empty list placeholders used exclusively by Repeat.
+- New editor drafts start with an empty hierarchy. The first chosen element becomes the root; empty drafts persist and first-element/root removal supports Undo/Redo.
 - Update wuira to 0.2.0 from npm and replace the legacy Spells enum with generated PaladinSpells members.
 - Preserve existing spell IDs through explicit ranked members where short aliases differ.
 - Remove two retired Sanctuary IDs absent from the Forever client catalog from the starter list. Existing saved collections remain unchanged.
@@ -196,12 +237,17 @@ All notable changes to the LumaUI addon suite are recorded here. Core and Editor
 
 ### Changed
 
+- Repeat no longer generates a named `items` source. Its child has an explicit Item input; current-item connections work for all lists, and Data accepts typed `parent.$item` or visible `RepeatName.$item` expressions alongside dropdown choices.
+- Preserve item source identity through component layers, notify consumers on keyed row updates, and remove only legacy empty list placeholders used exclusively by Repeat.
+- New editor drafts start with an empty hierarchy. The first chosen element becomes the root; empty drafts persist and first-element/root removal supports Undo/Redo.
 - Player resources and action bars render from one-time saved starter collections instead of regenerating user layouts.
 - Editor and ActionBars consume the current master contract through workspace links instead of packed contract copies.
 - Build output defaults to local `dist`; game deployment uses an ignored local configuration or output-root environment variable.
 
 ### Fixed
 
+- Invalid typed component connections restore the previous accepted field and show actionable type/context errors, so selection, Undo and retries are no longer trapped by rejected form text.
+- Missing required inputs in repeated children render a normalized empty preview cell instead of failing in the layout engine.
 - Preserve collection edits, source bindings, positions and optional-addon ownership across reloads.
 - Keep editor navigation open while selecting hierarchy elements and provide usable preview samples for inactive sources.
 - Reject cyclic or missing preset dependencies and conflicting shared IDs before applying an imported collection.

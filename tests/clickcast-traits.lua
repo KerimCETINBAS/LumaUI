@@ -8,7 +8,7 @@ local payloads={}
 C_EncodingUtil={SerializeCBOR=function(value)payloads[#payloads+1]=value;return tostring(#payloads)end,DeserializeCBOR=function(value)return payloads[tonumber(value)]end,CompressString=function(v)return v end,DecompressString=function(v)return v end,EncodeBase64=function(v)return v end,DecodeBase64=function(v)return v end}
 LumaUISettings={};SlashCmdList={};master.require('index')
 local library=LumaUI.ClickCastPresets
-local unitButton=master.require('builder.UnitButton')
+local unitButton=master.require('builder.units.UnitButton')
 local oldSubtext=C_Spell.GetSpellSubtext
 C_Spell.GetSpellSubtext=function(id) if id==635 then return 'Rank 1' end end
 local friendly=library:Create('Friendly',{{key='BUTTON1',spellId=635}}, {onlyTarget=true,friendly=true,enemy=false})
@@ -86,7 +86,7 @@ assert(not pcall(function() library:Create('Mixed invalid macro',{{key='BUTTON1'
 local legacy=library:Validate({version=2,kind='clickCast',id='legacy-traits',name='Legacy',traits={onlyTarget=true,friendly=true,enemy=false},bindings={{key='BUTTON1',spellId=635},{key='SHIFT-BUTTON1',spellId=19750}}})
 assert(legacy.traits==nil and legacy.bindings[1].targeting=='mouseover' and legacy.bindings[2].traits.enemy==false,'preset-level legacy traits migrate into every binding')
 
-local transfer=new(master.require('builder.PresetTransfer').PresetTransfer,LumaUI)
+local transfer=new(master.require('builder.transfer.PresetTransfer').PresetTransfer,LumaUI)
 local doc={version=1,kind='preset',id='traits-test',name='Traits test',sources={},root={id='button',type='secureButton',props={width=24,height=24,unit='party1',clickCastPreset=friendly.id}}}
 local payload=transfer:Decode(transfer:Export(doc),'preset')
 assert(payload.clickCastPresets[1].bindings[1].traits.onlyTarget and not payload.clickCastPresets[1].bindings[1].traits.enemy,'target policy survives export and decode')
@@ -95,7 +95,7 @@ payload=transfer:Decode(transfer:Export(doc),'preset');payload.clickCastPresets[
 transfer:PrepareClickCast(payload)
 assert(#library:List()==count+1 and payload.document.root.props.clickCastPreset~=friendly.id,'different traits cannot be merged during import')
 local Registry=master.require('lua_modules.wuira.lib.store.index').StoreRegistry
-local Library=master.require('builder.ClickCastLibrary').ClickCastLibrary
+local Library=master.require('builder.clickcast.ClickCastLibrary').ClickCastLibrary
 local registry=new(Registry,{addon='LumaUI',variable='LumaUISettings'})
 local reloaded=new(Library,registry,function()end,function()return false end)
 assert(reloaded:Get(friendly.id).bindings[1].traits.onlyTarget and not reloaded:Get(friendly.id).bindings[1].traits.enemy,'traits survive a new store registry')
@@ -132,7 +132,7 @@ listDoc.sources[1].props.items[2].key='one'
 assert(not pcall(function() LumaUI.Presets:Validate(listDoc) end),'duplicate static keys are rejected before mounting')
 
 -- Mount the real capture field and drive its native input handlers.
-local capture=master.require('builder.ClickBindingInput')
+local capture=master.require('builder.clickcast.ClickBindingInput')
 local previousShift,previousCtrl,previousAlt=IsShiftKeyDown,IsControlKeyDown,IsAltKeyDown
 local shift,ctrl,alt=false,false,false
 IsShiftKeyDown=function() return shift end

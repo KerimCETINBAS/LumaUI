@@ -3,7 +3,7 @@ C_AddOns={IsAddOnLoaded=function() return true,true end}
 LumaNativeTestSettings={}
 local Registry=master.require('lua_modules.wuira.lib.store.index').StoreRegistry
 local Layouts=master.require('lua_modules.wuira.lib.datasources.EditModeLayouts').EditModeLayouts
-local Controls=master.require('NativeFrameControls').NativeFrameControls
+local Controls=master.require('shell.NativeFrameControls').NativeFrameControls
 local nativeLayouts={activeLayout=1,layouts={{layoutName='A',layoutType=2},{layoutName='B',layoutType=2}}}
 C_EditMode={GetLayouts=function() return nativeLayouts end}
 function hooksecurefunc(object,method,callback)

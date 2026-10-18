@@ -1,62 +1,52 @@
 do
 local editorRegistry=__wuiraModules_LumaUI_Editor
-local draft=new(editorRegistry.require('Draft').EditorDraft)
-local choices=editorRegistry.require('ElementCatalog').elementChoices(nil)
-local available={};for _,choice in ipairs(choices) do available[choice.value]=true end
-assert(available.foreach and available.grid and available.unitText and available.unitIndicator and available.unitAuras and available.action and available.label and available.icon,'authoring exposes all unit/list elements')
+local draft=new(editorRegistry.require('draft.Draft').EditorDraft)
 local starter=LumaUI.Presets:Get('paladin-raid')
-draft:Open('hide-player-frame');assert(#draft:Tree()==1 and not draft:IsVisual(draft.nodes[1]))
 draft:Open('paladin-raid')
-assert(draft.nodes[1].kind=='foreach' and #draft:Tree()>20 and draft.documentName==starter.name,'component picker restores the full editable raid tree')
-for _,entry in ipairs(draft:Tree()) do draft:Select(entry.node.id);draft.propertyEditor:Ensure() end
-assert(draft.propertyEditor.nodeId==draft.selected,'all repeated-template props remain selectable')
-draft:New()
-assert(draft.nodes[1].kind=='cell' and #draft.sources==0,'New has no special component category')
-draft:Add('foreach');local listId=draft.selected;local member=draft:Children(listId)[1].id
-assert(draft.sources[1].type=='list' and #draft.sources[1].props.items==0,'Repeat starts with an empty generic list')
-local form=draft.sourceEditor
-form:Open();form:Type('groupMembers');form.name='members';form.values.scope='party';assert(form:Save())
-draft:BindSource('members','source')
-draft:UpdateSources({draft.sources[2]})
-draft.Selected.props.wrapAfter=5
-local document=draft:Document()
-assert(document.root.type=='cell' and document.root.children[1].source=='members' and #document.root.children[1].children==1 and #draft:Tree()==3)
-assert(document.sources[1].type=='groupMembers' and document.sources[1].props.scope=='party' and document.class==nil and document.condition==nil,'roster is explicitly bound with a source factory')
-draft:Select(member);draft:Remove();assert(#draft:Tree()==3,'last required template cannot be removed')
-draft:Add('action');local button=draft.selected
-assert(draft.Selected.props.unit=='$unit' and draft.Selected.props.clickCastPreset=='standard')
-draft:Add('flow');local layout=draft.selected
-assert(draft.Selected.parent==button,'presentation layout can be inserted inside a secure button')
-draft:Add('unitText');local name=draft.selected
-assert(draft.Selected.parent==layout and draft.Selected.props.unit=='$unit')
-draft:Add('progress');local bar=draft.selected
-local source=draft.sourceEditor
-source:Open();source:Type('hp');source.name='member.health';source.values.unit='$unit';source:Save()
-assert(draft.sources[2].name=='member.health' and draft.sources[2].props.unit=='$unit')
-draft:BindSource('member.health','source')
-assert(draft.Selected.source=='member.health')
-draft:Select(layout);draft:Add('unitIndicator');local role=draft.selected
-assert(draft.Selected.props.unit=='$unit')
-draft:MoveNode(role,name,'before')
-assert(draft:Children(layout)[1].id==role,'unit elements can be reordered inside the repeated template')
-draft:Select(listId);draft:Add('cell');local petTemplate=draft.selected
-local before=#draft.nodes
-draft:Select(listId);draft:Add('cell');assert(#draft.nodes==before,'reject a third list template without damaging the draft')
-draft:Select(petTemplate);draft:Remove()
-assert(draft:DropError(role,listId,'inside')==nil,'hierarchy accepts nesting into ForEach')
-local preview=LumaUI.Presets:Preview(draft:Document())
-preview.Frame=master.require('lua_modules.wuira.lib.index').wuira:Mount(preview.View)
-assert(preview.Nodes:get(member) and preview.Nodes:get(name) and preview.Nodes:get(bar),'blank-authored members render in the preview')
-assert(preview.Nodes:get(bar).value==75 and preview.Nodes:get(button).kind=='Frame','preview binds sample health and keeps secure actions disabled')
-assert(preview.Nodes:get(listId).height==5*72+4*4,'the repeated list renders five samples inside the explicit Cell root')
-preview:Dispose();assert(preview.Nodes.size==0)
-local imported=LumaUI.Presets:Import(LumaUI.Presets:Export(draft:Document()))
-draft:Load(imported);assert(draft:Document().root.children[1].children[1].children[1].children[1].children[3].source=='member.health','authoring tree and bindings survive sharing')
-draft:Select(listId);draft.Selected.props.groupBy='group'
-form:Open('members');form.values.scope='raid';assert(form:Save())
-assert(draft:Document().root.children[1].props.groupBy=='group' and draft:Document().sources[1].props.scope=='raid','raid authoring uses the same factories')
-draft:New();draft:Add('foreach')
-assert(draft.Selected.kind=='foreach' and draft.Selected.source and #draft:Children(draft.selected)==1,'adding a repeated list creates a valid editable template and source atomically')
-assert(LumaUI.Presets:Get('paladin-raid').root.children[1].props.width==starter.root.children[1].props.width,'new drafts do not replace saved starters')
-originalPrint('Editor roster authoring: component selection, blank lists, unit sources, nesting and sharing passed')
+assert(draft.nodes[1].kind=='foreach' and draft:Children(draft.nodes[1].id)[1].kind=='preset','Repeat opens component reference slots')
+assert(#draft.sources==1,'child resource sources do not appear in parent Sources')
+draft:Select(draft:Children(draft.nodes[1].id)[1].id);draft:OpenReference()
+assert(#draft:Tree()>20 and draft.sources[1],'child definition is editable in its own scope')
+local found=false;for _,s in ipairs(draft.sources)do if s.isProp and s.type=='unit' then found=true end end
+assert(found,'migrated unit input is visible in child Sources')
+draft:New();draft:Add('cell');draft:Add('foreach');local list=draft.selected;local slot=draft:Children(list)[1]
+assert(slot.kind=='preset' and #draft.sources==0 and slot.sourceProps.Item=='parent.$item','new Repeat exposes its current item without creating a list source')
+local count=#draft.nodes;draft:Add('cell');assert(#draft.nodes==count,'Repeat rejects inline templates')
+draft:Select(slot.id);draft:Remove();assert(#draft.nodes==count,'the last template slot is required')
+local form=draft.sourceEditor;form:Open();form:Type('groupMembers');form.name='members';form.values.scope='party';assert(form:Save())
+draft:Select(list);draft:BindSource('members','source');draft:UpdateSources({draft.sources[1]})
+local component={version=1,kind='preset',id='authored-member',name='Authored member',sources={{name='Member',type='unit',props={},isProp=true},{name='HP',type='hp',props={unit='Member'}}},root={id='bar',type='progress',props={width=80,height=12},source='HP'}}
+LumaUI.Presets:Save(component)
+draft:Select(slot.id);draft:ReplacePreset(component.id);draft:SetReferenceSource('Member','parent.$unit')
+assert(draft.Selected.sourceProps.Member=='parent.$unit' and #draft.sources==1,'Data passes current member into named input without parent HP sources')
+local before=draft.Selected.sourceProps.Member;draft:SetReferenceSource('Member','missing');assert(draft.Selected.sourceProps.Member==before,'invalid choice rolls back')
+local preview=LumaUI.Presets:Preview(draft:Document());preview.Frame=master.require('lua_modules.wuira.lib.index').wuira:Mount(preview.View)
+assert(preview.Nodes:get('bar') and preview.Nodes:get('bar').value==75,'child-owned HP renders sample values in preview');preview:Dispose()
+local imported=LumaUI.Presets:Import(LumaUI.Presets:Export(draft:Document()));draft:Load(imported)
+assert(draft:Document().root.children[1].children[1].sourceProps.Member=='parent.$unit','component input binding survives transfer')
+draft.activationMode='never';draft:Apply();draft:Select(slot.id);draft:OpenReference();assert(draft.sources[2].props.unit=='Member' and draft.nodes[1].source=='HP','editing child keeps local binding names')
+assert(LumaUI.Presets:Get('paladin-raid').root.children[1].preset==starter.root.children[1].preset,'authoring leaves saved starters unchanged')
+draft:New();draft:Add('cell');draft:Add('foreach')
+local rowList=draft.selected
+form:Open();form:Type('groupMembers');form.name='party';form.values.scope='party';assert(form:Save())
+draft:Select(rowList);draft:BindSource('party','source')
+local rowSlot=draft:Children(rowList)[1]
+local classMember={version=1,kind='preset',id='class-member',name='Class member',sources={{name='MEMBER',type='class',props={},isProp=true},{name='HP',type='hp',props={unit='MEMBER'}},{name='PRIMARY_RESOURCE',type='power',props={unit='MEMBER'}}},root={id='bar',type='progress',props={width=80,height=12},source='HP'}}
+LumaUI.Presets:Save(classMember,false)
+draft:Select(rowSlot.id);draft:ReplacePreset(classMember.id)
+draft:UseRowUnit('$unit')
+local savedChild
+for _,doc in ipairs(draft:Document().dependencies) do if doc.id=='class-member' then savedChild=doc end end
+assert(savedChild,'row unit stores the updated component')
+local memberOptional,healthUnit=false,nil
+for _,source in ipairs(savedChild.sources) do
+ if source.name=='MEMBER' then memberOptional=source.optional==true end
+ if source.name=='HP' then healthUnit=source.props.unit end
+ if source.name=='PRIMARY_RESOURCE' then assert(source.props.unit=='$unit','power uses the current member') end
+end
+assert(memberOptional and healthUnit=='$unit','row unit binds health to the repeated member and releases the class input')
+local rowPreview=LumaUI.Presets:Preview(draft:Document())
+assert(rowPreview.Nodes:get('bar') and rowPreview.Nodes:get('bar').value==75,'a class input no longer blocks the member preview')
+rowPreview:Dispose()
+originalPrint('Editor roster authoring: isolated child components, Data binding, preview and sharing passed')
 end

@@ -9,7 +9,7 @@ test('BlizzardElement JSX requires one operation, a unit predicate and a per-uni
     const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, root);
     const filename = path.join(root, 'src/__nameplate_types.tsx');
     const source = `
-        import { UI } from 'wuira';
+        import { UI } from 'wuira/ui';
         import { HP } from 'wuira/datasources';
         import type { SkinAPI, LumaHelpers } from './core/builder';
         declare const skins: SkinAPI, helpers: LumaHelpers;
