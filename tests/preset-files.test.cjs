@@ -22,7 +22,7 @@ test('Starter files contain bounded CBOR, raw Deflate, dependencies and no chara
 
 test('BuiltinPresets embeds only the canonical strings and is current',async()=>{
  const root=path.resolve(__dirname,'..');
- const source=fs.readFileSync(path.join(root,'addons/core/src/BuiltinPresets.ts'),'utf8');
+ const source=fs.readFileSync(path.join(root,'packages/core/src/BuiltinPresets.ts'),'utf8');
  const values=JSON.parse(source.match(/export const BuiltinPresets = ([\s\S]*?) as const;/)[1]);
  const manifest=JSON.parse(fs.readFileSync(path.join(root,'presets/catalog.json'),'utf8'));
  assert.deepEqual(Object.keys(values),Object.keys(manifest));

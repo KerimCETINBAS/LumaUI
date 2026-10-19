@@ -3,7 +3,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { pathToFileURL, fileURLToPath } from "node:url";
-import { root, addons } from "./config.mjs";
+import { root, addons, web } from "./config.mjs";
 import { generateBuiltinPresets } from "./generate-builtin-presets.mjs";
 import { buildIconAssets } from "./build-icons.mjs";
 const require = createRequire(import.meta.url);
@@ -29,16 +29,27 @@ export function buildAddons(outputRoot) {
             fs.cpSync(path.join(root, "presets"), path.join(outputRoot, addon.name, "presets"), { recursive: true });
     }
 }
+export function buildWeb() {
+    const directory = path.join(root, web.directory);
+    const webRequire = createRequire(path.join(directory, "package.json"));
+    const tsc = path.join(path.dirname(webRequire.resolve("typescript/package.json")), "lib/tsc.js");
+    const vite = path.join(path.dirname(webRequire.resolve("vite/package.json")), "bin/vite.js");
+    run(process.execPath, [tsc, "-p", "tsconfig.json", "--noEmit"], { cwd: directory });
+    run(process.execPath, [vite, "build"], { cwd: directory });
+}
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
     try {
+        const wantWeb = process.argv.includes("--web");
+        const wantAddons = process.argv.includes("--addons") || process.argv.includes("--deploy") || !wantWeb;
         let outputRoot = path.resolve(root, process.env.LUMAUI_OUTPUT_ROOT || "dist");
-        if (process.argv.includes("--deploy") && !process.env.LUMAUI_OUTPUT_ROOT) {
+        if (wantAddons && process.argv.includes("--deploy") && !process.env.LUMAUI_OUTPUT_ROOT) {
             const local = path.join(root, "lumaui.local.mjs");
             if (!fs.existsSync(local)) throw new Error("Copy lumaui.local.example.mjs to lumaui.local.mjs and set outputRoot.");
             const config = (await import(pathToFileURL(local).href)).default;
             if (typeof config?.outputRoot !== "string" || !config.outputRoot.trim()) throw new Error("Set outputRoot in lumaui.local.mjs.");
             outputRoot = path.resolve(root, config.outputRoot);
         }
-        buildAddons(outputRoot);
+        if (wantAddons) buildAddons(outputRoot);
+        if (wantWeb) buildWeb();
     } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

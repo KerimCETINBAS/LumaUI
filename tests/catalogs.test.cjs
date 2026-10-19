@@ -1,6 +1,6 @@
 const {test}=require("node:test");
 const assert=require("node:assert/strict"),fs=require("node:fs"),path=require("node:path"),vm=require("node:vm"),ts=require("typescript");
-const directory=path.resolve(__dirname,"../addons/editor/src");
+const directory=path.resolve(__dirname,"../packages/editor/src");
 function moduleTree(){const cache=new Map();function load(name){const file=path.join(directory,name+".ts");if(cache.has(file))return cache.get(file);const exports={};cache.set(file,exports);const script=ts.transpileModule(fs.readFileSync(file,"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;vm.runInNewContext(script,{exports,require:relative=>load(path.join(path.dirname(name),relative)),issecretvalue:()=>false,C_Spell:undefined,Set,Map,Number,String});return exports;}return load;}
 test("Spell search preserves client names, ranks and numeric identities with a 48-result cap",async()=>{
  const generator=await import('../tools/generate-spell-catalog.mjs');assert.equal(generator.generateSpellCatalog(true),31863);

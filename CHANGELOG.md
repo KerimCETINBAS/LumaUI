@@ -4,6 +4,17 @@ All notable changes to the LumaUI addon suite are recorded here. Core and Editor
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-10-19
+
+### Changed
+
+- Addon sources live under `packages/core` and `packages/editor`. Datasource factories open Wuira sources with `UseSource`.
+
+### Added
+
+- Empty `luma.web` shell, built with `npm run build -- --web`.
+- Source ownership note: a source has one owner, and a lower layer must not dispose a source it received.
+
 ## [0.2.3] - 2026-10-18
 
 ### Added

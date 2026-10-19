@@ -14,6 +14,6 @@ These examples use representative Paladin spell IDs. Choose the learned spell/ra
 
 These .luma.txt files are the source of truth. Create or edit a component in the game, export it, and replace the corresponding file to update an example. catalog.json supplies its code key, display name and import kind.
 
-Run npm run presets:generate to embed the strings in addons/core/src/BuiltinPresets.ts. Normal builds do this automatically. BuiltinPresets contains strings only; labels and kinds are separate metadata. The Built-in presets page opens a prefilled import dialog without decoding or saving until Import is confirmed.
+Run npm run presets:generate to embed the strings in packages/core/src/BuiltinPresets.ts. Normal builds do this automatically. BuiltinPresets contains strings only; labels and kinds are separate metadata. The Built-in presets page opens a prefilled import dialog without decoding or saving until Import is confirmed.
 
 - player-unit-frame.luma.txt and target-unit-frame.luma.txt: independent copies of the Paladin party member cell, with fixed player/target data, the same click presets and no party-only activation condition. Target uses secure unit-watch visibility. Native player/target frames are not hidden by these imports.

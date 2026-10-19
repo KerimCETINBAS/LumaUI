@@ -18,7 +18,7 @@ export function spellCatalogSource(entries = readSpellCatalog()) {
         + "export function spellCatalogData(): readonly string[] {\n    return " + JSON.stringify(chunks,null,4) + ";\n}\n";
 }
 export function generateSpellCatalog(check = false, sdk) {
-    const entries=readSpellCatalog(sdk), source=spellCatalogSource(entries), output=path.join(root,"addons/editor/src/catalogs/data/SpellCatalog.ts");
+    const entries=readSpellCatalog(sdk), source=spellCatalogSource(entries), output=path.join(root,"packages/editor/src/catalogs/data/SpellCatalog.ts");
     if(check) { if(!fs.existsSync(output)||fs.readFileSync(output,"utf8").replaceAll("\r\n","\n")!==source)throw new Error("Spell catalog is stale; run npm run catalogs:generate"); }
     else {fs.mkdirSync(path.dirname(output),{recursive:true});fs.writeFileSync(output,source);}
     return entries.length;

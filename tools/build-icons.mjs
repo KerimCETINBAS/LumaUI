@@ -4,13 +4,13 @@ import { fileURLToPath } from "node:url";
 import { Resvg } from "@resvg/resvg-js";
 import { root } from "./config.mjs";
 
-const sourceDirectory = path.join(root, "addons/core/assets/icons/svg");
+const sourceDirectory = path.join(root, "packages/core/assets/icons/svg");
 export function iconSources() {
     return fs.readdirSync(sourceDirectory).filter(name => name.endsWith(".svg")).sort().map(name => ({ name: name.slice(0, -4), svg: fs.readFileSync(path.join(sourceDirectory, name), "utf8") }));
 }
 export function iconManifest(sources = iconSources()) {
     const textures = Object.fromEntries(sources.map(({ name }) => [name, ["Interface", "AddOns", "LumaUI", "media", "icons", name + ".tga"].join(String.fromCharCode(92))]));
-    return "// Auto generated. Do not edit.\n// Source: addons/core/assets/icons/svg/*.svg\n\nexport const IconTextures = " + JSON.stringify(textures, null, 4) + " as const;\n";
+    return "// Auto generated. Do not edit.\n// Source: packages/core/assets/icons/svg/*.svg\n\nexport const IconTextures = " + JSON.stringify(textures, null, 4) + " as const;\n";
 }
 /** White alpha masks keep native tinting consistent and avoid premultiplied color edges. */
 export function renderIcon(svg) {
@@ -29,7 +29,7 @@ export function buildIconAssets() {
     const sources = iconSources(), output = path.join(root, ".generated/icons");
     fs.mkdirSync(output, { recursive: true });
     for (const { name, svg } of sources) fs.writeFileSync(path.join(output, name + ".tga"), renderIcon(svg));
-    const manifestPath = path.join(root, "addons/core/src/theme/icons.ts"), manifest = iconManifest(sources);
+    const manifestPath = path.join(root, "packages/core/src/theme/icons.ts"), manifest = iconManifest(sources);
     if (!fs.existsSync(manifestPath) || fs.readFileSync(manifestPath, "utf8") !== manifest) fs.writeFileSync(manifestPath, manifest);
     return output;
 }

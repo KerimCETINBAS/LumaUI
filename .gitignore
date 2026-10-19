@@ -6,6 +6,6 @@ artifacts/
 lumaui.local.mjs
 .packages/
 
-addons/**/.packages/
+packages/**/.packages/
 *.tgz
 *.zip

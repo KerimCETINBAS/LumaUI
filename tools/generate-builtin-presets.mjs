@@ -20,7 +20,7 @@ export function generateBuiltinPresets(check = false) {
     const source = "// Auto generated. Do not edit.\n// Source: presets/catalog.json and presets/*.luma.txt\n\n"
         + "export const BuiltinPresets = " + JSON.stringify(strings, null, 4) + " as const;\n\n"
         + "export const BuiltinPresetEntries = " + JSON.stringify(entries, null, 4) + " as const;\n";
-    const output = path.join(root, "addons/core/src/BuiltinPresets.ts");
+    const output = path.join(root, "packages/core/src/BuiltinPresets.ts");
     const previous = fs.existsSync(output) ? fs.readFileSync(output, "utf8").replaceAll("\r\n", "\n") : undefined;
     if (check && previous !== source) throw new Error("Built-in strings changed; run npm run presets:generate.");
     if (!check && previous !== source) fs.writeFileSync(output, source);

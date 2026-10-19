@@ -12,7 +12,7 @@ LumaUI is an in-game UI builder for **WoW Forever**. Create resource displays, c
 
 Start with a built-in preset or a blank canvas. Shape it in the visual editor, connect it to game data, and save it as a reusable component.
 
-[Download](https://github.com/kerimcetinbas/LumaUI/releases) · [Editor guide](https://github.com/kerimcetinbas/LumaUI/blob/main/addons/editor/README.md) · [Changelog](CHANGELOG.md) · [Report an issue](https://github.com/kerimcetinbas/LumaUI/issues)
+[Download](https://github.com/kerimcetinbas/LumaUI/releases) · [Editor guide](https://github.com/kerimcetinbas/LumaUI/blob/main/packages/editor/README.md) · [Changelog](CHANGELOG.md) · [Report an issue](https://github.com/kerimcetinbas/LumaUI/issues)
 
 LumaUI is in active development, with WoW Forever as its current compatibility target.
 
@@ -97,7 +97,7 @@ For a solo preview of a group component, enable it and choose **Always** in the 
 
 ## Follow the project
 
-See the [editor guide](https://github.com/kerimcetinbas/LumaUI/blob/main/addons/editor/README.md) and [changelog](CHANGELOG.md). When reporting an issue, include your LumaUI version, client build, steps to reproduce and any Lua error.
+See the [editor guide](https://github.com/kerimcetinbas/LumaUI/blob/main/packages/editor/README.md) and [changelog](CHANGELOG.md). When reporting an issue, include your LumaUI version, client build, steps to reproduce and any Lua error.
 
 LumaUI is built with [wuira](https://www.npmjs.com/package/wuira), the separate TypeScript/JSX framework. Developers can extend it through registered components, sources, list helpers and native skin adapters. See [development and releases](docs/development.md) and the [Builder API](docs/builder.md).
 

@@ -1,14 +1,15 @@
 {
   "name": "lumaui-monorepo",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "private": true,
   "license": "MIT",
   "engines": {
     "node": ">=22.13"
   },
   "workspaces": [
-    "addons/core",
-    "addons/editor"
+    "packages/core",
+    "packages/editor",
+    "packages/web"
   ],
   "scripts": {
     "check": "npm run check --workspaces",

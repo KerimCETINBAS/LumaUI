@@ -1,0 +1,13 @@
+{
+  "name": "lumaui-editor",
+  "version": "0.2.4",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "build": "wuira build",
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "lumaui": "*"
+  }
+}

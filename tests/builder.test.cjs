@@ -1,7 +1,7 @@
 const {test}=require("node:test");
 const assert=require("node:assert/strict");
 const fs=require("node:fs"),os=require("node:os"),path=require("node:path"),cp=require("node:child_process");
-const root=path.resolve(__dirname,"../addons/core");
+const root=path.resolve(__dirname,"../packages/core");
 test("Preset factories, native skins, import validation and lifecycle work in emitted Lua",()=>{
  const temp=fs.mkdtempSync(path.join(os.tmpdir(),"lumaui-builder-"));
  try {

@@ -5,9 +5,10 @@ LumaUI is the addon runtime and component engine. [wuira](https://www.npmjs.com/
 ## Repository
 
 ```text
-addons/
+packages/
   core/         LumaUI runtime, shared theme and lumaui/core contract
   editor/       Optional in-game visual editor
+  web/          Browser editor shell
 tools/          Shared build and release scripts
 tests/          Emitted-Lua runtime and cross-addon integration checks
 docs/           User, extension and maintainer documentation
@@ -24,9 +25,12 @@ Use Node.js 22.13 or newer. Run these commands from the repository root:
 npm ci
 npm run check
 npm run build
+npm run build -- --web
 npm test
 npm run test:integration
 ```
+
+`npm run build` writes the addon folders. `npm run build -- --web` writes the browser shell. Pass `--addons` and `--web` together to build both. `npm run deploy` still installs the addons into the local game directory.
 
 Build before running the tests: editor, persistence and icon-packaging checks read the compiled output. The build creates two standalone addon folders under `dist/`. Tests exercise emitted Lua against mocked native APIs; manual testing in the supported client verifies game behavior and presentation.
 

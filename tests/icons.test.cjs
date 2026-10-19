@@ -22,7 +22,7 @@ test("SVG glyphs render as transparent native textures and are included in stand
   assert.equal(manifest[name],expected,"single-separator native texture path");
   assert.deepEqual(fs.readFileSync(path.resolve(__dirname,"../dist/LumaUI/media/icons",name+".tga")),tga,"packaged "+name);
  }
- const generated=fs.readFileSync(path.resolve(__dirname,"../addons/core/src/theme/icons.ts"),"utf8").replaceAll("\r\n","\n");
+ const generated=fs.readFileSync(path.resolve(__dirname,"../packages/core/src/theme/icons.ts"),"utf8").replaceAll("\r\n","\n");
  assert.equal(generated,iconManifest(sources),"theme catalog matches packaged textures");
  const top=renderIcon('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><rect width="24" height="6" fill="white"/></svg>');
  assert.equal(top[21],0,"bottom-origin TGA first row is the empty bottom");

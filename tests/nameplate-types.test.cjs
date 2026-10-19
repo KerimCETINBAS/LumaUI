@@ -4,7 +4,7 @@ const path = require('node:path');
 const ts = require('typescript');
 
 test('BlizzardElement JSX requires one operation, a unit predicate and a per-unit factory', () => {
-    const root = path.resolve(__dirname, '../addons/core');
+    const root = path.resolve(__dirname, '../packages/core');
     const config = ts.readConfigFile(path.join(root, 'tsconfig.json'), ts.sys.readFile);
     const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, root);
     const filename = path.join(root, 'src/__nameplate_types.tsx');
